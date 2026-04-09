@@ -1,0 +1,27 @@
+# Saveero backend dependencies
+# Pin majors, not patch versions — update intentionally, not accidentally.
+
+# --- Web framework ---
+fastapi==0.116.*
+uvicorn[standard]==0.35.*
+starlette==0.47.*
+python-multipart==0.0.*        # multipart form / file upload
+
+# --- Database ---
+sqlalchemy==2.0.*
+psycopg2-binary==2.9.*         # Postgres driver
+
+# --- Auth ---
+PyJWT[crypto]==2.10.*
+httpx==0.28.*                  # async HTTP (used by JWT JWKS fetch + image describer)
+
+# --- AI / LLM ---
+openai==1.101.*                # OpenAI-compatible client (used by LangChain + OpenRouter)
+langchain==0.3.*
+langchain-openai==0.3.*
+langchain-core==0.3.*
+instructor==1.10.*             # structured LLM output
+json-repair==0.50.*            # fix truncated or malformed JSON from LLMs
+
+# --- Validation ---
+pydantic==2.11.*
