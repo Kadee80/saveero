@@ -60,6 +60,18 @@ const ROWS: Row[] = [
   { label: 'Equity at year 5',    key: 'equityY5',            format: formatCurrency, winner: 'max', note: 'Principal paid down + down payment' },
 ];
 
+// Flat numeric-only result shape — safe to index with Record<string, number>
+interface ScenarioResult {
+  monthlyTotal: number;
+  downPaymentDollars: number;
+  loanAmount: number;
+  ltv: number;
+  totalInterest: number;
+  totalCost: number;
+  pmi: number;
+  equityY5: number;
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ScenarioComparison() {
@@ -96,8 +108,8 @@ export default function ScenarioComparison() {
     }
   }
 
-  // Derive metrics for each scenario
-  const results = scenarios.map((s) => {
+  // Derive metrics for each scenario — flat numbers only, safe to index
+  const results: ScenarioResult[] = scenarios.map((s) => {
     const downPaymentDollars = (s.downPaymentPct / 100) * purchasePrice;
     const summary = analyzeMortgage({
       purchasePrice,
@@ -115,9 +127,10 @@ export default function ScenarioComparison() {
       .reduce((sum, row) => sum + row.principal, 0);
 
     return {
-      ...summary,
       monthlyTotal: summary.monthly.total,
       downPaymentDollars,
+      loanAmount: summary.loanAmount,
+      ltv: summary.ltv,
       totalInterest: summary.totalInterestPaid,
       totalCost: summary.totalCostOfLoan,
       pmi: summary.monthly.pmi,
@@ -127,7 +140,7 @@ export default function ScenarioComparison() {
 
   // For each row, find which scenario wins
   function winnerIndex(rowKey: string, winner: 'min' | 'max') {
-    const vals = results.map((r) => (r as Record<string, number>)[rowKey]);
+    const vals = results.map((r) => (r as unknown as Record<string, number>)[rowKey]);
     const target = winner === 'min' ? Math.min(...vals) : Math.max(...vals);
     return vals.indexOf(target);
   }
