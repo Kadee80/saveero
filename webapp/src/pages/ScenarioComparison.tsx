@@ -399,7 +399,7 @@ export default function ScenarioComparison() {
                       {row.note && <div className="text-xs opacity-70">{row.note}</div>}
                     </td>
                     {results.map((r, i) => {
-                      const val = (r as Record<string, number>)[row.key];
+                      const val = (r as unknown as Record<string, number>)[row.key];
                       const isWinner = i === wi && scenarios.length > 1;
                       return (
                         <td
