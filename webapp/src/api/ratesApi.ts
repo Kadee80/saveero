@@ -12,36 +12,39 @@
  */
 
 export interface CurrentRates {
-  rate30yr: number;  // % e.g. 6.82
-  rate15yr: number;  // % e.g. 6.13
-  rate20yr: number;  // % interpolated — FRED doesn't publish 20yr directly
-  asOf: string;      // ISO date string of the most recent data point
-  source: 'fred' | 'fallback';
+  rate30yr: number // % e.g. 6.82
+  rate15yr: number // % e.g. 6.13
+  rate20yr: number // % interpolated — FRED doesn't publish 20yr directly
+  asOf: string // ISO date string of the most recent data point
+  source: 'fred' | 'fallback'
 }
 
 // Routed through Vite's proxy (/fred-proxy → https://api.stlouisfed.org/fred)
 // to avoid CORS — FRED blocks direct browser requests.
-const FRED_BASE = '/fred-proxy/series/observations';
-const API_KEY = import.meta.env.VITE_FRED_API_KEY as string | undefined;
+const FRED_BASE = '/fred-proxy/series/observations'
+const API_KEY = import.meta.env.VITE_FRED_API_KEY as string | undefined
 
-async function fetchSeries(seriesId: string): Promise<{ value: number; date: string }> {
-  if (!API_KEY) throw new Error('No FRED API key');
+async function fetchSeries(
+  seriesId: string
+): Promise<{value: number; date: string}> {
+  if (!API_KEY) throw new Error('No FRED API key')
 
-  const url = new URL(FRED_BASE);
-  url.searchParams.set('series_id', seriesId);
-  url.searchParams.set('api_key', API_KEY);
-  url.searchParams.set('sort_order', 'desc');
-  url.searchParams.set('limit', '1');
-  url.searchParams.set('file_type', 'json');
+  const params = new URLSearchParams({
+    series_id: seriesId,
+    api_key: API_KEY,
+    sort_order: 'desc',
+    limit: '1',
+    file_type: 'json',
+  })
 
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`FRED API error: ${res.status}`);
+  const res = await fetch(`${FRED_BASE}?${params.toString()}`)
+  if (!res.ok) throw new Error(`FRED API error: ${res.status}`)
 
-  const data = await res.json();
-  const obs = data.observations?.[0];
-  if (!obs || obs.value === '.') throw new Error('No data returned');
+  const data = await res.json()
+  const obs = data.observations?.[0]
+  if (!obs || obs.value === '.') throw new Error('No data returned')
 
-  return { value: parseFloat(obs.value), date: obs.date };
+  return {value: parseFloat(obs.value), date: obs.date}
 }
 
 /** Fetch live rates from FRED. Falls back gracefully if unavailable. */
@@ -50,10 +53,10 @@ export async function fetchCurrentRates(): Promise<CurrentRates> {
     const [r30, r15] = await Promise.all([
       fetchSeries('MORTGAGE30US'),
       fetchSeries('MORTGAGE15US'),
-    ]);
+    ])
 
     // 20-year isn't published by FRED — interpolate between 15 and 30
-    const rate20yr = parseFloat(((r15.value + r30.value) / 2).toFixed(2));
+    const rate20yr = parseFloat(((r15.value + r30.value) / 2).toFixed(2))
 
     return {
       rate30yr: r30.value,
@@ -61,9 +64,9 @@ export async function fetchCurrentRates(): Promise<CurrentRates> {
       rate20yr,
       asOf: r30.date,
       source: 'fred',
-    };
+    }
   } catch {
-    return getFallbackRates();
+    return getFallbackRates()
   }
 }
 
@@ -78,5 +81,5 @@ function getFallbackRates(): CurrentRates {
     rate20yr: 6.48,
     asOf: '2026-04-03',
     source: 'fallback',
-  };
+  }
 }
