@@ -7,10 +7,10 @@ Application entry point. Wires together:
   - Routers (listing wizard today; mortgage, scenarios to follow)
 
 Run locally:
-    uvicorn saveero.main:app --reload
+    python3 -m uvicorn main:app --reload
 
 Or via the CLI helper:
-    python -m saveero.main --port 8000
+    python3 main.py --port 8000
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from jwt import PyJWKClient
 from starlette.responses import FileResponse
 from starlette.staticfiles import StaticFiles
 
-from saveero.api.listing_wizard_routes import router as wizard_router
+from api.listing_wizard_routes import router as wizard_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -113,9 +113,9 @@ async def catch_all(full_path: str):
 app.include_router(wizard_router, prefix="/api")
 
 # Future modules — uncomment as they ship:
-# from saveero.api.mortgage_routes   import router as mortgage_router
-# from saveero.api.scenario_routes   import router as scenario_router
-# from saveero.api.property_routes   import router as property_router
+# from api.mortgage_routes   import router as mortgage_router
+# from api.scenario_routes   import router as scenario_router
+# from api.property_routes   import router as property_router
 # app.include_router(mortgage_router,  prefix="/api")
 # app.include_router(scenario_router,  prefix="/api")
 # app.include_router(property_router,  prefix="/api")
@@ -144,4 +144,4 @@ if __name__ == "__main__":
     parser.add_argument("--reload", action="store_true")
     args = parser.parse_args()
 
-    uvicorn.run("saveero.main:app", host=args.host, port=args.port, reload=args.reload)
+    uvicorn.run("main:app", host=args.host, port=args.port, reload=args.reload)

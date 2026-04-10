@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from saveero.listing_wizard import ListingGenerator
+from listing_wizard import ListingGenerator
 
 router = APIRouter(tags=["Listing Wizard"])
 security = HTTPBearer()
