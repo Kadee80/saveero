@@ -1,15 +1,17 @@
 import React, { useState } from 'react'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Home, Calculator, ChevronLeft, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, Home, Calculator, GitCompare, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Dashboard from './pages/Dashboard'
 import ListProperty from './pages/ListProperty'
 import MortgageCalculator from './pages/MortgageCalculator'
+import ScenarioComparison from './pages/ScenarioComparison'
 
 const navItems = [
-  { to: '/',                   label: 'Dashboard',    icon: LayoutDashboard },
-  { to: '/list-property',      label: 'List Property', icon: Home },
-  { to: '/mortgage-calculator', label: 'Mortgage',     icon: Calculator },
+  { to: '/',                    label: 'Dashboard',    icon: LayoutDashboard },
+  { to: '/list-property',       label: 'List Property', icon: Home },
+  { to: '/mortgage-calculator', label: 'Mortgage',      icon: Calculator },
+  { to: '/scenarios',           label: 'Compare',       icon: GitCompare },
   // Add new routes here as modules ship
 ]
 
@@ -78,6 +80,7 @@ export default function App() {
             <Route path="/"                    element={<Dashboard />} />
             <Route path="/list-property"       element={<ListProperty />} />
             <Route path="/mortgage-calculator" element={<MortgageCalculator />} />
+            <Route path="/scenarios"           element={<ScenarioComparison />} />
           </Routes>
         </div>
         <footer className="text-center text-xs text-muted-foreground py-4">
