@@ -362,6 +362,76 @@ Required environment variables:
 
 ---
 
+## Building for Production
+
+### Build the frontend
+
+```bash
+cd webapp
+npm run build
+```
+
+This runs TypeScript type-checking first (`tsc -b`), then bundles everything into `webapp/dist/`. If `tsc` fails, fix the errors before deploying — the build will not proceed past type errors.
+
+The `dist/` folder is what gets deployed. Do not commit it to git (it's in `.gitignore`).
+
+---
+
+## Deploying to Vercel
+
+Vercel hosts the frontend as a static site. The mortgage calculator and scenario comparison work fully on Vercel. The listing wizard requires a separately hosted backend.
+
+### First deploy
+
+Make sure you have built first (`npm run build` above), then:
+
+```bash
+cd webapp
+npx vercel dist
+```
+
+Vercel will ask a few questions the first time:
+
+| Question | Answer |
+|---|---|
+| Set up and deploy? | Y |
+| Which scope? | your personal account |
+| Link to existing project? | N |
+| Project name? | saveero-demo (or whatever you want) |
+| Directory? | `./` — just press Enter |
+
+Vercel auto-detects Vite. If it asks manually:
+- Build command: `npm run build`
+- Output directory: `dist`
+
+At the end you get a public URL like `saveero-demo-abc123.vercel.app`. That's what you share.
+
+### Subsequent deploys
+
+```bash
+cd webapp
+npm run build
+npx vercel dist --prod
+```
+
+`--prod` promotes to your production URL instead of creating a new preview URL.
+
+### Environment variables on Vercel
+
+`VITE_FRED_API_KEY` needs to be set in Vercel's dashboard for live rates to work in production:
+
+1. Go to [vercel.com](https://vercel.com) → your project → Settings → Environment Variables
+2. Add `VITE_FRED_API_KEY` with your key value
+3. Redeploy — Vercel bakes env vars into the build at deploy time
+
+**Note:** Vite env vars are embedded into the JavaScript bundle at build time, not read at runtime. If you change an env var in the Vercel dashboard, you must redeploy for it to take effect.
+
+### How FRED rates work in production
+
+In local dev, Vite proxies `/fred-proxy/*` to `api.stlouisfed.org` to avoid CORS. In production, `webapp/vercel.json` handles the same proxy via Vercel's rewrite rules — no extra configuration needed.
+
+---
+
 ## Codebase Structure
 
 ```
