@@ -19,7 +19,9 @@ export interface CurrentRates {
   source: 'fred' | 'fallback';
 }
 
-const FRED_BASE = 'https://api.stlouisfed.org/fred/series/observations';
+// Routed through Vite's proxy (/fred-proxy → https://api.stlouisfed.org/fred)
+// to avoid CORS — FRED blocks direct browser requests.
+const FRED_BASE = '/fred-proxy/series/observations';
 const API_KEY = import.meta.env.VITE_FRED_API_KEY as string | undefined;
 
 async function fetchSeries(seriesId: string): Promise<{ value: number; date: string }> {
@@ -61,7 +63,6 @@ export async function fetchCurrentRates(): Promise<CurrentRates> {
       source: 'fred',
     };
   } catch {
-    // Graceful fallback — shows a message in the UI but doesn't break the calculator
     return getFallbackRates();
   }
 }

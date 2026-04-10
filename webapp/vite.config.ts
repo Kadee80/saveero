@@ -13,10 +13,16 @@ export default defineConfig({
     port: 5173,
     open: true,
     proxy: {
-      // Forward /api/* requests to the backend as-is (no path rewrite)
+      // Forward /api/* requests to the FastAPI backend
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+      },
+      // Proxy FRED API calls to avoid CORS — browser can't call api.stlouisfed.org directly
+      '/fred-proxy': {
+        target: 'https://api.stlouisfed.org',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/fred-proxy/, '/fred'),
       },
     },
   },

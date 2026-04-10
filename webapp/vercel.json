@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/fred-proxy/:path*",
+      "destination": "https://api.stlouisfed.org/fred/:path*"
+    }
+  ]
+}
