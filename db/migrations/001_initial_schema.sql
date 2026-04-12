@@ -180,30 +180,30 @@ $$;
 
 -- Users table policies
 -- Users can see themselves; admins can see all.
-create policy if not exists users_select_self on public.users
+create policy users_select_self on public.users
 for select using (
   id = auth.uid() or public.is_admin(auth.uid())
 );
 
-create policy if not exists users_update_self on public.users
+create policy users_update_self on public.users
 for update using (
   id = auth.uid() or public.is_admin(auth.uid())
 ) with check (
   id = auth.uid() or public.is_admin(auth.uid())
 );
 
-create policy if not exists users_insert_self on public.users
+create policy users_insert_self on public.users
 for insert with check (
   id = auth.uid() or public.is_admin(auth.uid())
 );
 
 -- Properties policies: owner sees only their rows; admins see all.
-create policy if not exists properties_select_owner on public.properties
+create policy properties_select_owner on public.properties
 for select using (
   owner_id = auth.uid() or public.is_admin(auth.uid())
 );
 
-create policy if not exists properties_mod_owner on public.properties
+create policy properties_mod_owner on public.properties
 for all using (
   owner_id = auth.uid() or public.is_admin(auth.uid())
 ) with check (
@@ -211,7 +211,7 @@ for all using (
 );
 
 -- Property photos inherit property ownership
-create policy if not exists photos_access_owner on public.property_photos
+create policy photos_access_owner on public.property_photos
 for all using (
   exists (
     select 1 from public.properties p
@@ -225,7 +225,7 @@ for all using (
 );
 
 -- Comps inherit property ownership
-create policy if not exists comps_access_owner on public.comps
+create policy comps_access_owner on public.comps
 for all using (
   exists (
     select 1 from public.properties p
@@ -239,7 +239,7 @@ for all using (
 );
 
 -- Offers inherit property ownership
-create policy if not exists offers_access_owner on public.offers
+create policy offers_access_owner on public.offers
 for all using (
   exists (
     select 1 from public.properties p
@@ -253,7 +253,7 @@ for all using (
 );
 
 -- Tasks: owner is either assigned user or property owner
-create policy if not exists tasks_access_owner on public.tasks
+create policy tasks_access_owner on public.tasks
 for all using (
   user_id = auth.uid() or public.is_admin(auth.uid()) or (
     property_id is not null and exists (
@@ -271,14 +271,14 @@ for all using (
 );
 
 -- MLS mapping: admins only by default; allow read to all authenticated if desired
-create policy if not exists mls_mapping_admin_all on public.mls_mapping
+create policy mls_mapping_admin_all on public.mls_mapping
 for all using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
 
 -- Audit logs: admins can see all; users can see their own entries
-create policy if not exists audit_logs_select on public.audit_logs
+create policy audit_logs_select on public.audit_logs
 for select using (public.is_admin(auth.uid()) or user_id = auth.uid());
 
-create policy if not exists audit_logs_insert_self on public.audit_logs
+create policy audit_logs_insert_self on public.audit_logs
 for insert with check (user_id = auth.uid() or public.is_admin(auth.uid()));
 
 -- Notes:
