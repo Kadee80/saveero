@@ -65,7 +65,7 @@ def get_current_user(
         logger.warning("Auth failed: %s: %s", type(exc).__name__, exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            detail=f"Auth error: {type(exc).__name__}: {exc}",
         ) from exc
 
 
