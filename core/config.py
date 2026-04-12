@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_jwt_audience: str = "authenticated"
     supabase_service_role_key: str  # backend only — never expose to frontend
+    # JWK public key JSON string — copy from:
+    # https://<project>.supabase.co/auth/v1/.well-known/jwks.json (single key object)
+    supabase_jwt_jwk: str = ""
 
     # AI
     openrouter_api_key: str
