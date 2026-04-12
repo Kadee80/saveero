@@ -134,7 +134,7 @@ class SaveListingRequest(BaseModel):
 @router.post("/listings/save")
 async def save_listing(
     body: SaveListingRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser,
 ) -> Dict[str, Any]:
     """
     Save a generated listing to the database.
@@ -198,7 +198,7 @@ async def save_listing(
 
 @router.get("/listings")
 async def list_listings(
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser,
 ) -> List[Dict[str, Any]]:
     """Return all listings for the current user, newest first."""
     db = get_db()
@@ -222,7 +222,7 @@ async def list_listings(
 @router.get("/listings/{listing_id}")
 async def get_listing(
     listing_id: str,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser,
 ) -> Dict[str, Any]:
     """Return a single listing with its comps."""
     db = get_db()
