@@ -28,31 +28,8 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------------------------
-# Static frontend
-# ---------------------------------------------------------------------------
-
-if os.path.isdir(f"{settings.frontend_dist}/assets"):
-    app.mount(
-        "/assets",
-        StaticFiles(directory=f"{settings.frontend_dist}/assets"),
-        name="assets",
-    )
-
-
-@app.get("/", include_in_schema=False)
-async def root():
-    return FileResponse(f"{settings.frontend_dist}/index.html", media_type="text/html")
-
-
-@app.get("/{full_path:path}", include_in_schema=False)
-async def catch_all(full_path: str):
-    if full_path.startswith(("api/", "assets/")):
-        raise HTTPException(status_code=404)
-    return FileResponse(f"{settings.frontend_dist}/index.html", media_type="text/html")
-
-
-# ---------------------------------------------------------------------------
-# Routers
+# Routers — registered BEFORE the static catch-all so FastAPI matches
+# /api/... routes first (routes are evaluated in registration order).
 # ---------------------------------------------------------------------------
 
 app.include_router(wizard_router, prefix="/api")
@@ -73,6 +50,30 @@ app.include_router(wizard_router, prefix="/api")
 @app.get("/api/health")
 def health():
     return {"status": "ok", "version": app.version}
+
+
+# ---------------------------------------------------------------------------
+# Static frontend — catch-all LAST so API routes always win
+# ---------------------------------------------------------------------------
+
+if os.path.isdir(f"{settings.frontend_dist}/assets"):
+    app.mount(
+        "/assets",
+        StaticFiles(directory=f"{settings.frontend_dist}/assets"),
+        name="assets",
+    )
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return FileResponse(f"{settings.frontend_dist}/index.html", media_type="text/html")
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def catch_all(full_path: str):
+    if full_path.startswith(("api/", "assets/")):
+        raise HTTPException(status_code=404)
+    return FileResponse(f"{settings.frontend_dist}/index.html", media_type="text/html")
 
 
 # ---------------------------------------------------------------------------

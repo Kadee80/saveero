@@ -3,6 +3,10 @@
     {
       "source": "/fred-proxy/:path*",
       "destination": "https://api.stlouisfed.org/fred/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://YOUR_RAILWAY_URL/api/:path*"
     }
   ]
 }
