@@ -13,6 +13,7 @@ Usage:
 """
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from typing import Annotated, Any, Dict
 
@@ -21,6 +22,8 @@ from fastapi import Depends, Header, HTTPException, status
 from jwt import PyJWKClient
 
 from core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache
@@ -59,9 +62,10 @@ def get_current_user(
         )
         return claims
     except Exception as exc:
+        logger.warning("JWT validation failed: %s: %s", type(exc).__name__, exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            detail=f"Invalid or expired token: {type(exc).__name__}: {exc}",
         ) from exc
 
 
