@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # Frontend static files
     frontend_dist: str = "webapp/dist"
 
+    # CORS — set to your Vercel production URL in Railway env vars
+    # e.g. https://saveero-demo-4-10.vercel.app
+    frontend_origin: str = "http://localhost:5173"
+
     @property
     def supabase_jwks_url(self) -> str:
         return f"{self.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"

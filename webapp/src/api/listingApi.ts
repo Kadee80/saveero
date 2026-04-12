@@ -98,6 +98,10 @@ export interface ListingFormData {
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
+// In production the frontend calls Railway directly (VITE_API_URL).
+// In dev it uses a relative path which Vite proxies to localhost:8000.
+const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+
 async function apiFetch<T>(url: string, init: RequestInit): Promise<T> {
   const auth = await authHeader()
   const headers: Record<string, string> = {
@@ -105,7 +109,7 @@ async function apiFetch<T>(url: string, init: RequestInit): Promise<T> {
   }
   if (auth) headers['Authorization'] = auth
 
-  const res = await fetch(url, { ...init, headers })
+  const res = await fetch(`${API_BASE}${url}`, { ...init, headers })
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
     throw new Error(`${res.status} ${res.statusText}: ${text}`)

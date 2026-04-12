@@ -12,6 +12,7 @@ import logging
 import os
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import FileResponse
 from starlette.staticfiles import StaticFiles
 
@@ -25,6 +26,23 @@ app = FastAPI(
     title="Saveero API",
     version="0.1.0",
     description="Home decision platform API",
+)
+
+# ---------------------------------------------------------------------------
+# CORS — allow the Vercel frontend (and localhost for dev) to call the API
+# ---------------------------------------------------------------------------
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",       # Vite dev server
+        "http://localhost:4173",       # Vite preview
+        "https://*.vercel.app",        # all Vercel preview deployments
+        settings.frontend_origin,      # production domain (set in env)
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # ---------------------------------------------------------------------------
