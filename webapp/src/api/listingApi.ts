@@ -2,7 +2,7 @@
  * Listing wizard API client.
  * Talks to POST /api/listings/generate on the Saveero backend.
  */
-import { getAuthToken } from './auth'
+import { authHeader } from './auth'
 
 // ─── Types (mirror saveero/listing_wizard/models.py) ─────────────────────────
 
@@ -99,11 +99,11 @@ export interface ListingFormData {
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(url: string, init: RequestInit): Promise<T> {
-  const token = getAuthToken()
+  const auth = await authHeader()
   const headers: Record<string, string> = {
     ...(init.headers as Record<string, string> ?? {}),
   }
-  if (token) headers['Authorization'] = `Bearer ${token}`
+  if (auth) headers['Authorization'] = auth
 
   const res = await fetch(url, { ...init, headers })
   if (!res.ok) {
@@ -126,16 +126,42 @@ export const listingApi = {
     return apiFetch<GeneratedListing>('/api/listings/generate', { method: 'POST', body })
   },
 
-  /**
-   * Persist a confirmed listing to the database.
-   * Calls POST /api/listings/save
-   * TODO: implement once the property routes module is built.
-   */
+  /** Persist a confirmed listing to the database. */
   async save(listing: GeneratedListing): Promise<{ success: boolean; id?: string }> {
     return apiFetch('/api/listings/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(listing),
+      body: JSON.stringify({
+        address: listing.address,
+        headline: listing.title,
+        description: listing.description,
+        price_min: listing.recommended_price * 0.95,
+        price_max: listing.recommended_price * 1.05,
+        price_mid: listing.recommended_price,
+        beds: listing.bedrooms,
+        baths: listing.bathrooms,
+        sqft: listing.square_feet,
+        comps: listing.similar_properties,
+      }),
     })
   },
+
+  /** Fetch all listings for the current user. */
+  async list(): Promise<SavedListing[]> {
+    return apiFetch<SavedListing[]>('/api/listings', { method: 'GET' })
+  },
+}
+
+// Shape returned by GET /api/listings
+export interface SavedListing {
+  id: string
+  address: string
+  status: string
+  price_mid: number | null
+  price_min_suggested: number | null
+  price_max_suggested: number | null
+  beds: number | null
+  baths: number | null
+  description_ai: string | null
+  created_at: string
 }

@@ -1,35 +1,61 @@
 /**
- * Auth helpers.
+ * auth.ts
  *
- * In production this will integrate with Supabase Auth — the token will be
- * stored after a real sign-in flow. The stub below keeps local development
- * working without requiring a live Supabase project.
+ * Supabase authentication client for the frontend.
+ * Provides login, logout, session access, and a helper for
+ * adding the Authorization header to API requests.
  *
- * TODO: replace with Supabase JS client once auth module is built.
+ * Requires in webapp/.env:
+ *   VITE_SUPABASE_URL=https://your-project.supabase.co
+ *   VITE_SUPABASE_ANON_KEY=your-anon-key
  */
+import { createClient, type Session, type User } from '@supabase/supabase-js';
 
-export const getAuthToken = (): string | null => {
-  return localStorage.getItem('sb-access-token') ?? sessionStorage.getItem('sb-access-token')
+const supabaseUrl  = import.meta.env.VITE_SUPABASE_URL  as string;
+const supabaseAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+if (!supabaseUrl || !supabaseAnon) {
+  console.warn(
+    '[auth] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not set. ' +
+    'Auth will not work. Check webapp/.env.',
+  );
 }
 
-export const setAuthToken = (token: string, persist = true): void => {
-  const storage = persist ? localStorage : sessionStorage
-  storage.setItem('sb-access-token', token)
+export const supabase = createClient(supabaseUrl ?? '', supabaseAnon ?? '');
+
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
+
+export async function signIn(email: string, password: string) {
+  return supabase.auth.signInWithPassword({ email, password });
 }
 
-export const clearAuthToken = (): void => {
-  localStorage.removeItem('sb-access-token')
-  sessionStorage.removeItem('sb-access-token')
+export async function signUp(email: string, password: string) {
+  return supabase.auth.signUp({ email, password });
 }
 
-export const isAuthenticated = (): boolean => {
-  const token = getAuthToken()
-  if (!token) return false
-  try {
-    const [, payload] = token.split('.')
-    const { exp } = JSON.parse(atob(payload))
-    return exp > Math.floor(Date.now() / 1000)
-  } catch {
-    return false
-  }
+export async function signOut() {
+  return supabase.auth.signOut();
+}
+
+export async function getSession(): Promise<Session | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session;
+}
+
+export async function getUser(): Promise<User | null> {
+  const { data } = await supabase.auth.getUser();
+  return data.user;
+}
+
+/**
+ * Returns the Authorization header value for API calls.
+ * Returns null if the user isn't logged in.
+ *
+ * Usage:
+ *   const auth = await authHeader();
+ *   fetch('/api/listings', { headers: { Authorization: auth ?? '' } });
+ */
+export async function authHeader(): Promise<string | null> {
+  const session = await getSession();
+  return session ? `Bearer ${session.access_token}` : null;
 }

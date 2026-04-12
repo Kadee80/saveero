@@ -8,8 +8,9 @@ starlette==0.47.*
 python-multipart==0.0.*        # multipart form / file upload
 
 # --- Database ---
+supabase==2.15.*               # Supabase Python client (REST + auth)
 sqlalchemy==2.0.*
-psycopg2-binary==2.9.*         # Postgres driver
+psycopg2-binary==2.9.*         # Postgres driver (kept for direct queries if needed)
 
 # --- Auth ---
 PyJWT[crypto]==2.10.*
@@ -25,3 +26,4 @@ json-repair==0.50.*            # fix truncated or malformed JSON from LLMs
 
 # --- Validation ---
 pydantic==2.11.*
+pydantic-settings==2.9.*       # Settings management from .env
