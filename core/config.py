@@ -32,7 +32,6 @@ class Settings(BaseSettings):
 
     # Supabase
     supabase_url: str
-    supabase_jwt_secret: str        # Settings → API → JWT Secret in Supabase dashboard
     supabase_jwt_audience: str = "authenticated"
     supabase_service_role_key: str  # backend only — never expose to frontend
 
