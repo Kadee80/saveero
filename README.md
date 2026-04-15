@@ -21,6 +21,55 @@ AI-powered home decision platform for real estate agents. Upload property photos
 | Frontend hosting | Vercel |
 | Backend hosting | Render |
 
+## Frontend Architecture
+
+The Saveero frontend is a **React 18 + Vite 5 + TypeScript SPA** that provides an intuitive interface for real estate agents to generate AI listings, calculate mortgages, and manage properties.
+
+**Key highlights:**
+- **Type-safe** — Full TypeScript coverage with no `any` types
+- **Responsive design** — Mobile-first Tailwind CSS with dark theme
+- **Real-time calculations** — Interactive mortgage calculator with live Federal Reserve rates
+- **AI-powered workflow** — 3-step listing wizard with photo analysis
+- **Secure authentication** — Supabase JWT + automatic token refresh
+
+**Main pages:**
+- **Dashboard** (`/`) — View all saved listings with status and pricing
+- **List Property** (`/list-property`) — 3-step wizard to upload photos and generate AI listings
+- **Mortgage Calculator** (`/mortgage-calculator`) — Calculate payments with live rates and full amortization
+- **Scenario Comparison** (`/scenarios`) — Compare up to 3 loan options side-by-side
+- **Login** — Secure email/password authentication via Supabase
+
+**For comprehensive architecture documentation**, see **[FRONTEND.md](./FRONTEND.md)** which covers:
+- Detailed folder structure and component organization
+- API layer design (auth, listings, rates)
+- State management patterns using React hooks
+- Mortgage calculation library
+- Development workflow (adding pages, components, API calls)
+- Deployment and performance optimization strategies
+
+### Quick Start
+
+```bash
+cd webapp
+npm install
+
+# Copy and fill .env with Supabase and FRED API keys
+cp .env.example .env
+
+# Start dev server (opens at http://localhost:5173)
+npm run dev
+```
+
+### Folder Structure
+
+```
+webapp/src/
+├── pages/          # Route-level components (Login, Dashboard, ListProperty, etc.)
+├── components/ui/  # Reusable UI primitives (Button, Card, Input, etc.)
+├── api/            # HTTP clients (auth.ts, listingApi.ts, ratesApi.ts)
+└── lib/            # Utilities (mortgage.ts, utils.ts)
+```
+
 ---
 
 ## Local Development

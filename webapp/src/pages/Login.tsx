@@ -1,9 +1,30 @@
 /**
- * Login.tsx
+ * Login page component - authentication interface for sign-in and sign-up
  *
- * Sign-in / sign-up page. Shown when no Supabase session is active.
- * On successful auth the parent (App.tsx) detects the session change
- * via onAuthStateChange and renders the main app.
+ * This page is shown when no Supabase session is active. Users can:
+ * - Sign in with existing email/password
+ * - Create a new account with email/password
+ * - Toggle between sign-in and sign-up modes
+ *
+ * After successful authentication:
+ * - Parent component (App.tsx) detects session change via onAuthStateChange
+ * - Renders main application UI
+ * - JWT token is stored by Supabase client
+ *
+ * Features:
+ * - Dark theme (slate-950 background)
+ * - Toggle between sign-in and sign-up modes
+ * - Email validation
+ * - Password minimum length requirement (6 chars)
+ * - Error and info banners for user feedback
+ * - Loading state during auth operations
+ * - Signup confirmation email notice
+ *
+ * @component
+ * @returns {JSX.Element} The login/signup page
+ *
+ * @example
+ * <Login />
  */
 import React, { useState } from 'react'
 import { signIn, signUp } from '@/api/auth'
@@ -12,8 +33,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 
+/** Mode type for auth page - either signin or signup flow */
 type Mode = 'signin' | 'signup'
 
+/**
+ * Login component - authentication interface
+ *
+ * Handles both sign-in and sign-up flows with mode toggling.
+ * Communicates with Supabase via auth.ts helpers.
+ *
+ * @returns {JSX.Element} Themed login form
+ */
 export default function Login() {
   const [mode, setMode]       = useState<Mode>('signin')
   const [email, setEmail]     = useState('')
@@ -22,6 +52,21 @@ export default function Login() {
   const [info, setInfo]       = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  /**
+   * Handle form submission for both sign-in and sign-up
+   *
+   * Sign-in:
+   * - Calls signIn from auth.ts
+   * - On success, onAuthStateChange fires and parent renders app
+   * - On error, displays error message
+   *
+   * Sign-up:
+   * - Calls signUp from auth.ts
+   * - On success, shows confirmation email message and switches to sign-in
+   * - On error, displays error message
+   *
+   * @param {React.FormEvent} e - Form submission event
+   */
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)

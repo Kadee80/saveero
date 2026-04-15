@@ -1,3 +1,31 @@
+/**
+ * Mortgage Calculator page component
+ *
+ * Interactive mortgage calculator for estimating monthly payments and total loan costs.
+ *
+ * Features:
+ * - Live interest rates from Federal Reserve (FRED API)
+ * - Input fields for purchase price, down payment, interest rate, loan term
+ * - Additional fields for property taxes, insurance, HOA dues
+ * - Real-time calculation as user types
+ * - Monthly payment breakdown (P&I, tax, insurance, PMI, HOA)
+ * - PMI warning and month-to-payoff calculation
+ * - Amortization schedule (annual snapshots, expandable)
+ * - Loan-to-value (LTV) calculation
+ * - Graceful fallback to estimated rates if API unavailable
+ *
+ * Data flow:
+ * - Fetches current rates on mount via fetchCurrentRates
+ * - Updates rate when user changes loan term
+ * - Recalculates summary whenever any field changes (via useEffect with JSON.stringify)
+ * - Displays rate source (live FRED or estimated fallback)
+ *
+ * @component
+ * @returns {JSX.Element} The mortgage calculator page
+ *
+ * @example
+ * <MortgageCalculator />
+ */
 import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import {
@@ -22,6 +50,9 @@ import { fetchCurrentRates, type CurrentRates } from '@/api/ratesApi';
 
 // ─── Form shape ─────────────────────────────────────────────────────────────
 
+/**
+ * Form input values for the mortgage calculator
+ */
 interface FormValues {
   purchasePrice: number;
   downPayment: number;
@@ -32,6 +63,9 @@ interface FormValues {
   monthlyHoa: number;
 }
 
+/**
+ * Loan term options available in the calculator
+ */
 const TERM_OPTIONS: Array<{ label: string; value: '15' | '20' | '30' }> = [
   { label: '15 yr', value: '15' },
   { label: '20 yr', value: '20' },
@@ -40,12 +74,44 @@ const TERM_OPTIONS: Array<{ label: string; value: '15' | '20' | '30' }> = [
 
 // ─── Utility ────────────────────────────────────────────────────────────────
 
+/**
+ * Calculate percentage of a value relative to a total
+ *
+ * @param {number} value - The value to calculate percentage for
+ * @param {number} total - The total reference amount
+ * @returns {number} Percentage (0-100), rounded to nearest integer
+ *
+ * @example
+ * pct(500, 1000)  // Returns 50
+ * pct(0, 1000)    // Returns 0
+ */
 function pct(value: number, total: number) {
   return total === 0 ? 0 : Math.round((value / total) * 100);
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
+/**
+ * Breakdown bar component - visualizes monthly payment composition
+ *
+ * Displays a horizontal stacked bar chart showing the breakdown of monthly
+ * payment into principal+interest, tax, insurance, PMI, and HOA with
+ * color coding and percentage labels.
+ *
+ * Components shown (if > $0):
+ * - P&I (blue): Principal and interest
+ * - Tax (amber): Property tax
+ * - Ins. (green): Homeowner's insurance
+ * - PMI (red): Private mortgage insurance
+ * - HOA (purple): HOA dues
+ *
+ * @param {Object} props - Component props
+ * @param {MortgageSummary['monthly']} props.monthly - Monthly payment breakdown object
+ * @returns {JSX.Element} Stacked bar chart with legend
+ *
+ * @example
+ * <BreakdownBar monthly={summary.monthly} />
+ */
 function BreakdownBar({ monthly }: { monthly: MortgageSummary['monthly'] }) {
   const segments = [
     { label: 'P&I', value: monthly.principal + monthly.interest, color: 'bg-blue-500' },
@@ -80,6 +146,25 @@ function BreakdownBar({ monthly }: { monthly: MortgageSummary['monthly'] }) {
   );
 }
 
+/**
+ * Amortization table component - shows loan paydown schedule
+ *
+ * Displays annual snapshots of the amortization schedule showing:
+ * - Year (month number / 12)
+ * - Principal paid that year
+ * - Interest paid that year
+ * - Remaining balance
+ *
+ * Only shows every 12th row (annual data) to keep the table manageable.
+ * For a 30-year loan, shows 30 rows total.
+ *
+ * @param {Object} props - Component props
+ * @param {AmortizationRow[]} props.rows - Full amortization schedule from mortgage calculation
+ * @returns {JSX.Element} Scrollable table
+ *
+ * @example
+ * <AmortizationTable rows={summary.amortization} />
+ */
 function AmortizationTable({ rows }: { rows: AmortizationRow[] }) {
   // Show every 12th row (annual snapshots) to keep the table readable
   const annual = rows.filter((r) => r.month % 12 === 0);
@@ -118,6 +203,22 @@ function AmortizationTable({ rows }: { rows: AmortizationRow[] }) {
 
 // ─── Main page ───────────────────────────────────────────────────────────────
 
+/**
+ * MortgageCalculator component - interactive mortgage calculation tool
+ *
+ * Allows users to input loan parameters and instantly see:
+ * - Monthly payment (PITI: Principal, Interest, Taxes, Insurance)
+ * - Loan-to-value ratio and PMI requirements
+ * - Total interest and cost of loan
+ * - Amortization schedule
+ * - Real-time rate updates from Federal Reserve
+ *
+ * @component
+ * @returns {JSX.Element} The calculator page with form and results
+ *
+ * @example
+ * <MortgageCalculator />
+ */
 export default function MortgageCalculator() {
   const [rates, setRates] = useState<CurrentRates | null>(null);
   const [loadingRates, setLoadingRates] = useState(false);

@@ -1,3 +1,26 @@
+/**
+ * Dashboard page component - displays all saved property listings for the current user
+ *
+ * Features:
+ * - Shows summary statistics (total, active, draft listings)
+ * - Displays each listing with key properties (address, price, beds, baths, created date)
+ * - Color-coded status badges (draft/published/active)
+ * - Links to view/edit individual listings
+ * - Handles loading and error states gracefully
+ * - Gracefully handles unauthenticated state (shows empty state, not error)
+ *
+ * Data flow:
+ * - Fetches user email and listing data on mount via listingApi
+ * - Displays loading state during initial fetch
+ * - Shows error banner only for non-401 errors (401 = not logged in = normal)
+ * - Empty state prompts user to create first listing
+ *
+ * @component
+ * @returns {JSX.Element} The dashboard page with listing table
+ *
+ * @example
+ * <Dashboard />
+ */
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Home, Plus, Bed, Bath, DollarSign, Clock, ArrowRight } from 'lucide-react'
@@ -7,6 +30,17 @@ import { formatCurrency } from '@/lib/utils'
 import { listingApi, type SavedListing } from '@/api/listingApi'
 import { getUser } from '@/api/auth'
 
+/**
+ * Formats an ISO datetime string as a human-readable relative time string
+ *
+ * @param {string} iso - ISO 8601 datetime string
+ * @returns {string} Relative time (e.g., "Today", "Yesterday", "3 days ago", or formatted date)
+ *
+ * @example
+ * timeAgo('2026-04-15T10:30:00Z') // Returns "Today"
+ * timeAgo('2026-04-14T10:30:00Z') // Returns "Yesterday"
+ * timeAgo('2026-04-10T10:30:00Z') // Returns "5 days ago"
+ */
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const days = Math.floor(diff / 86400000)
@@ -16,6 +50,22 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString()
 }
 
+/**
+ * Status badge component - displays listing status with color coding
+ *
+ * Maps status values to styled badges:
+ * - draft: slate (gray) - not yet published
+ * - published: blue - listing is live
+ * - active: green - actively being marketed
+ *
+ * @param {Object} props - Component props
+ * @param {string} props.status - Listing status value (draft/published/active or custom)
+ * @returns {JSX.Element} Styled status badge
+ *
+ * @example
+ * <StatusBadge status="active" />  // Returns green "active" badge
+ * <StatusBadge status="draft" />   // Returns gray "draft" badge
+ */
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     draft:     'bg-slate-100 text-slate-600',
@@ -29,6 +79,29 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+/**
+ * Dashboard component - displays all saved listings for the current user
+ *
+ * Features:
+ * - Shows summary statistics (total, active, draft listings)
+ * - Displays each listing with key properties (address, price, beds, baths, created date)
+ * - Color-coded status badges (draft/published/active)
+ * - Links to view/edit individual listings
+ * - Handles loading and error states gracefully
+ * - Gracefully handles unauthenticated state (shows empty state, not error)
+ *
+ * Data flow:
+ * - Fetches user email and listing data on mount via listingApi
+ * - Displays loading state during initial fetch
+ * - Shows error banner only for non-401 errors (401 = not logged in = normal)
+ * - Empty state prompts user to create first listing
+ *
+ * @component
+ * @returns {JSX.Element} The dashboard page with listing table
+ *
+ * @example
+ * <Dashboard />
+ */
 export default function Dashboard() {
   const [listings, setListings]   = useState<SavedListing[]>([])
   const [loading, setLoading]     = useState(true)

@@ -1,13 +1,30 @@
 /**
- * ListProperty — AI listing wizard
+ * ListProperty page component - AI-powered listing wizard
  *
- * Three steps:
- *   1. Upload photos + enter address
- *   2. Review AI-generated listing (editable)
- *   3. Confirm and save
+ * Three-step wizard for creating property listings:
+ * 1. Upload photos + enter address and optional notes
+ * 2. Review AI-generated listing with inline editing of description
+ * 3. Confirm details and save to database
  *
- * State lives in local React — no Zustand needed at this scale.
- * The wizard calls POST /api/listings/generate then POST /api/listings/save.
+ * Features:
+ * - Drag-and-drop photo upload with preview gallery
+ * - AI analysis of photos to generate property details
+ * - Editable description and metadata review
+ * - Comparable properties and highlights display
+ * - Success confirmation and redirect to dashboard
+ *
+ * Architecture:
+ * - State lives in component-level React (no Zustand needed at this scale)
+ * - Wizard calls POST /api/listings/generate with photos
+ * - Then POST /api/listings/save with confirmed listing data
+ * - UploadedImage files are previewed via URL.createObjectURL
+ * - Step indicators show progress through the wizard
+ *
+ * @component
+ * @returns {JSX.Element} The listing wizard page
+ *
+ * @example
+ * <ListProperty />
  */
 import React, { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -28,20 +45,50 @@ import { listingApi, GeneratedListing } from '@/api/listingApi'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/**
+ * Represents a photo uploaded by the user
+ */
 interface UploadedImage {
+  /** The File object from the input */
   file: File
+  /** Object URL for previewing the image (via URL.createObjectURL) */
   preview: string
 }
 
+/**
+ * Form values for Step 1 (photos + address)
+ */
 interface Step1Form {
+  /** Property address (required) */
   address: string
+  /** Optional notes for the AI (recent renovations, pricing targets, etc.) */
   notes: string
 }
 
 // ─── Step indicators ──────────────────────────────────────────────────────────
 
+/**
+ * Step labels for the wizard progress bar
+ */
 const STEPS = ['Photos & Address', 'Review Listing', 'Confirm']
 
+/**
+ * Step progress indicator bar - shows which step is active and which are complete
+ *
+ * Visual design:
+ * - Completed steps show a checkmark and primary color
+ * - Active step shows the step number and primary color
+ * - Future steps show the step number and muted color
+ * - Horizontal dividers connect steps
+ *
+ * @param {Object} props - Component props
+ * @param {number} props.current - Currently active step (0-indexed)
+ * @returns {JSX.Element} Progress bar component
+ *
+ * @example
+ * <StepBar current={0} />  // First step active
+ * <StepBar current={1} />  // Second step active, first marked complete
+ */
 function StepBar({ current }: { current: number }) {
   return (
     <div className="flex items-center gap-2 mb-8">
@@ -71,6 +118,34 @@ function StepBar({ current }: { current: number }) {
 
 // ─── Step 1 — Photos + address ────────────────────────────────────────────────
 
+/**
+ * Step 1 component - photo upload and property address entry
+ *
+ * Features:
+ * - Drag-and-drop zone for photos with visual feedback
+ * - Click to select photos from filesystem
+ * - Photo preview grid with remove buttons
+ * - Address field (required)
+ * - Optional notes field for agent/seller context
+ * - Generate button disabled until at least one photo is uploaded
+ *
+ * On submit:
+ * - Calls onNext with address and notes
+ * - Parent will initiate listing generation
+ *
+ * @param {Object} props - Component props
+ * @param {UploadedImage[]} props.images - Array of uploaded photos
+ * @param {Function} props.setImages - State setter for images
+ * @param {Function} props.onNext - Callback when form is submitted (address, notes) => void
+ * @returns {JSX.Element} Step 1 form
+ *
+ * @example
+ * <Step1
+ *   images={images}
+ *   setImages={setImages}
+ *   onNext={(address, notes) => handleStep1(address, notes)}
+ * />
+ */
 function Step1({
   images, setImages, onNext,
 }: {
@@ -184,6 +259,35 @@ function Step1({
 
 // ─── Step 2 — Review AI output ────────────────────────────────────────────────
 
+/**
+ * Step 2 component - review and edit AI-generated listing
+ *
+ * Features:
+ * - Displays header with property title, address, and recommended price
+ * - Editable description field (allows agent customization)
+ * - Shows property details (beds, baths, sqft, property type, year built)
+ * - Displays AI-generated highlights as badges
+ * - Shows comparable properties table with address, specs, and price
+ * - Back/Next buttons to navigate wizard
+ *
+ * Editing:
+ * - Currently only description is editable inline
+ * - Full field editing can be added later
+ * - Edited listing is passed to onNext
+ *
+ * @param {Object} props - Component props
+ * @param {GeneratedListing} props.listing - AI-generated listing from Step 1
+ * @param {Function} props.onBack - Callback to go back to Step 1
+ * @param {Function} props.onNext - Callback to advance to Step 3, receives edited listing
+ * @returns {JSX.Element} Step 2 review form
+ *
+ * @example
+ * <Step2
+ *   listing={generatedListing}
+ *   onBack={() => setStep(0)}
+ *   onNext={(edited) => { setListing(edited); setStep(2); }}
+ * />
+ */
 function Step2({
   listing, onBack, onNext,
 }: {
@@ -285,6 +389,31 @@ function Step2({
 
 // ─── Step 3 — Confirm ─────────────────────────────────────────────────────────
 
+/**
+ * Step 3 component - confirm and save listing to database
+ *
+ * Features:
+ * - Summary card showing property, type, beds/baths, recommended price
+ * - Save button that calls listingApi.save
+ * - Loading and error states
+ * - Success confirmation screen with redirect to dashboard
+ * - Back button to return to Step 2 for edits
+ *
+ * Flow:
+ * - Saves listing via listingApi.save which calls POST /api/listings/save
+ * - Shows loading spinner during save
+ * - On success, displays confirmation message
+ * - Clicking "Go to Dashboard" navigates to home
+ * - On error, displays error message and allows retry
+ *
+ * @param {Object} props - Component props
+ * @param {GeneratedListing} props.listing - Confirmed listing to save
+ * @param {Function} props.onBack - Callback to go back to Step 2
+ * @returns {JSX.Element} Step 3 confirmation form
+ *
+ * @example
+ * <Step3 listing={listing} onBack={() => setStep(1)} />
+ */
 function Step3({ listing, onBack }: { listing: GeneratedListing; onBack: () => void }) {
   const navigate = useNavigate()
   const [saving, setSaving] = useState(false)
@@ -359,6 +488,37 @@ function Step3({ listing, onBack }: { listing: GeneratedListing; onBack: () => v
 
 // ─── Main wizard ──────────────────────────────────────────────────────────────
 
+/**
+ * ListProperty page component - AI-powered property listing wizard
+ *
+ * Three-step wizard for creating property listings:
+ * 1. Upload photos + enter address and optional notes
+ * 2. Review AI-generated listing with inline editing
+ * 3. Confirm and save to database
+ *
+ * Features:
+ * - Step indicator bar showing progress
+ * - Loading overlay during AI generation
+ * - Error handling with user-friendly messages
+ * - Full navigation between steps
+ * - Step 1: Drag-and-drop photo upload
+ * - Step 2: AI-generated listing review with editable description
+ * - Step 3: Final confirmation before saving
+ *
+ * Data flow:
+ * - Collects photos, address, and notes in Step 1
+ * - Calls listingApi.generate to send photos to backend
+ * - Backend returns AI-analyzed listing details
+ * - User can edit description in Step 2
+ * - Calls listingApi.save in Step 3 to persist to database
+ * - Shows success screen and redirects to dashboard
+ *
+ * @component
+ * @returns {JSX.Element} The complete listing wizard
+ *
+ * @example
+ * <ListProperty />
+ */
 export default function ListProperty() {
   const [step, setStep] = useState(0)
   const [images, setImages] = useState<UploadedImage[]>([])

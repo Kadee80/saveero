@@ -1,3 +1,33 @@
+/**
+ * Scenario Comparison page component - compare up to 3 mortgage scenarios side-by-side
+ *
+ * Allows users to compare different financing strategies:
+ * - Different down payments (%, converted to dollars)
+ * - Different interest rates
+ * - Different loan terms (15, 20, 30 years)
+ *
+ * Features:
+ * - Live interest rates from Federal Reserve (FRED API)
+ * - Side-by-side scenario cards with editable inputs
+ * - Add/remove scenarios (max 3)
+ * - Shared property inputs (purchase price, taxes, insurance, HOA)
+ * - Comprehensive comparison table with 8+ metrics
+ * - Winner highlighting (lower monthly = best, higher equity = best, etc.)
+ * - Monthly savings calculation vs. lowest payment option
+ * - Trophy badges for best scenario
+ *
+ * Metrics compared:
+ * - Monthly payment, down payment needed, loan amount
+ * - Loan-to-value, total interest, total cost
+ * - PMI amount, equity built in 5 years
+ * - Savings/cost vs. cheapest option
+ *
+ * @component
+ * @returns {JSX.Element} The scenario comparison page
+ *
+ * @example
+ * <ScenarioComparison />
+ */
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Trophy, RefreshCw, AlertCircle } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -11,44 +41,85 @@ import { fetchCurrentRates, type CurrentRates } from '@/api/ratesApi';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+/**
+ * Represents a single mortgage scenario in the comparison
+ */
+/**
+ * Represents a single mortgage scenario in the comparison
+ */
 interface Scenario {
+  /** Unique identifier */
   id: string;
+  /** Display name (e.g., "Conservative", "Aggressive") */
   name: string;
-  downPaymentPct: number;   // % of purchase price, e.g. 10
+  /** Down payment as percentage of purchase price (e.g., 20 means 20%) */
+  downPaymentPct: number;
+  /** Annual interest rate as percentage (e.g., 6.82) */
   annualRatePercent: number;
+  /** Loan term in years: 15, 20, or 30 */
   termYears: 15 | 20 | 30;
 }
 
+/**
+ * Loan term options available in scenario comparison
+ */
 const TERM_OPTIONS: Array<{ label: string; value: 15 | 20 | 30 }> = [
   { label: '15 yr', value: 15 },
   { label: '20 yr', value: 20 },
   { label: '30 yr', value: 30 },
 ];
 
+/**
+ * Default scenarios for new users (pre-populated comparison examples)
+ */
 const DEFAULT_SCENARIOS: Scenario[] = [
   { id: '1', name: 'Conservative', downPaymentPct: 20, annualRatePercent: 6.82, termYears: 30 },
   { id: '2', name: 'Aggressive',   downPaymentPct: 10, annualRatePercent: 6.82, termYears: 30 },
   { id: '3', name: '15-Year',      downPaymentPct: 20, annualRatePercent: 6.13, termYears: 15 },
 ];
 
+/**
+ * Color scheme for scenario cards (border, background, text)
+ * Index corresponds to scenario position (0-2)
+ */
 const SCENARIO_COLORS = ['border-blue-400', 'border-violet-400', 'border-emerald-400'];
 const SCENARIO_BG     = ['bg-blue-50',      'bg-violet-50',      'bg-emerald-50'];
 const SCENARIO_TEXT   = ['text-blue-700',   'text-violet-700',   'text-emerald-700'];
 
+/**
+ * Generate a short random ID for new scenarios
+ *
+ * @returns {string} 6-character random ID
+ *
+ * @example
+ * uid()  // Returns something like "a7k3m9"
+ */
 function uid() {
   return Math.random().toString(36).slice(2, 8);
 }
 
 // ─── Comparison rows config ───────────────────────────────────────────────────
 
+/**
+ * Configuration for a single metric row in the comparison table
+ */
 interface Row {
+  /** Display label (e.g., "Monthly payment") */
   label: string;
+  /** Key to access value in ScenarioResult */
   key: string;
+  /** Function to format number for display */
   format: (v: number) => string;
-  winner: 'min' | 'max'; // min = lower is better, max = higher is better
+  /** 'min' = lower is better, 'max' = higher is better */
+  winner: 'min' | 'max';
+  /** Optional explanatory note shown below label */
   note?: string;
 }
 
+/**
+ * Metrics displayed in the comparison table
+ * Each row has a label, accessor key, format function, and winner direction
+ */
 const ROWS: Row[] = [
   { label: 'Monthly payment',     key: 'monthlyTotal',        format: formatCurrency, winner: 'min' },
   { label: 'Down payment needed', key: 'downPaymentDollars',  format: formatCurrency, winner: 'min', note: 'Cash out of pocket at closing' },
@@ -60,20 +131,43 @@ const ROWS: Row[] = [
   { label: 'Equity at year 5',    key: 'equityY5',            format: formatCurrency, winner: 'max', note: 'Principal paid down + down payment' },
 ];
 
-// Flat numeric-only result shape — safe to index with Record<string, number>
+/**
+ * Flat numeric-only result shape — safe to index with Record<string, number>
+ * Derived from each scenario's inputs via analyzeMortgage
+ */
 interface ScenarioResult {
+  /** Total monthly payment (principal, interest, taxes, insurance, PMI, HOA) */
   monthlyTotal: number;
+  /** Down payment in dollars */
   downPaymentDollars: number;
+  /** Loan amount (purchase price - down payment) */
   loanAmount: number;
+  /** Loan-to-value ratio as percentage (0-100) */
   ltv: number;
+  /** Total interest paid over loan term */
   totalInterest: number;
+  /** Total cost of loan (all P&I payments combined) */
   totalCost: number;
+  /** Monthly PMI payment (0 if LTV <= 80%) */
   pmi: number;
+  /** Equity built in first 5 years (down payment + principal paid) */
   equityY5: number;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+/**
+ * ScenarioComparison component - compare multiple mortgage scenarios
+ *
+ * Allows users to create and compare 2-3 different financing options
+ * with shared property data but different loan parameters.
+ *
+ * @component
+ * @returns {JSX.Element} The scenario comparison tool
+ *
+ * @example
+ * <ScenarioComparison />
+ */
 export default function ScenarioComparison() {
   const [purchasePrice, setPurchasePrice] = useState(450000);
   const [annualTaxPct, setAnnualTaxPct]   = useState(1.2);
@@ -83,11 +177,11 @@ export default function ScenarioComparison() {
   const [rates, setRates]                 = useState<CurrentRates | null>(null);
   const [loadingRates, setLoadingRates]   = useState(false);
 
-  // Fetch rates on mount
-  useEffect(() => {
-    loadRates();
-  }, []);
-
+  /**
+   * Load current mortgage rates from FRED API
+   * Updates all scenarios with live rates matching their term
+   * Falls back gracefully to estimated rates if API unavailable
+   */
   async function loadRates() {
     setLoadingRates(true);
     try {
@@ -108,7 +202,14 @@ export default function ScenarioComparison() {
     }
   }
 
-  // Derive metrics for each scenario — flat numbers only, safe to index
+  // Fetch rates on mount
+  useEffect(() => {
+    loadRates();
+  }, []);
+
+  /**
+   * Derive metrics for each scenario — flat numbers only, safe to index
+   */
   const results: ScenarioResult[] = scenarios.map((s) => {
     const downPaymentDollars = (s.downPaymentPct / 100) * purchasePrice;
     const summary = analyzeMortgage({
@@ -138,19 +239,38 @@ export default function ScenarioComparison() {
     };
   });
 
-  // For each row, find which scenario wins
+  /**
+   * Find which scenario wins for a given metric row
+   *
+   * @param {string} rowKey - The metric key to evaluate
+   * @param {'min' | 'max'} winner - Direction (lower or higher is better)
+   * @returns {number} Index of winning scenario (0-2)
+   *
+   * @example
+   * winnerIndex('monthlyTotal', 'min')  // Returns index of lowest payment
+   */
   function winnerIndex(rowKey: string, winner: 'min' | 'max') {
     const vals = results.map((r) => (r as unknown as Record<string, number>)[rowKey]);
     const target = winner === 'min' ? Math.min(...vals) : Math.max(...vals);
     return vals.indexOf(target);
   }
 
+  /**
+   * Update a scenario's properties
+   *
+   * @param {string} id - Scenario ID to update
+   * @param {Partial<Scenario>} patch - Properties to update
+   */
   function updateScenario(id: string, patch: Partial<Scenario>) {
     setScenarios((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...patch } : s)),
     );
   }
 
+  /**
+   * Add a new scenario (max 3 total)
+   * New scenario has default values and uses current 30yr rate
+   */
   function addScenario() {
     if (scenarios.length >= 3) return;
     setScenarios((prev) => [
@@ -165,6 +285,11 @@ export default function ScenarioComparison() {
     ]);
   }
 
+  /**
+   * Remove a scenario (minimum 2 scenarios must remain)
+   *
+   * @param {string} id - Scenario ID to remove
+   */
   function removeScenario(id: string) {
     if (scenarios.length <= 2) return;
     setScenarios((prev) => prev.filter((s) => s.id !== id));
