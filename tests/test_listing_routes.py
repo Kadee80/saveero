@@ -12,11 +12,25 @@ Tests for listing API endpoints:
 
 import pytest
 import json
+import os
 from io import BytesIO
 from unittest.mock import patch, MagicMock
+from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 from main import app
+from tests.mock_responses import (
+    get_mock_openrouter_listing_response,
+    get_mock_user_listings,
+    get_mock_listing_save_response,
+    get_mock_listing_by_id,
+    get_mock_image_analysis,
+)
+
+# Load test environment
+if os.path.exists('tests/.env.test'):
+    from dotenv import load_dotenv
+    load_dotenv('tests/.env.test')
 
 client = TestClient(app)
 
@@ -35,68 +49,8 @@ def auth_headers(valid_jwt_token):
 
 @pytest.fixture
 def mock_listing_response():
-    """Standard generated listing response"""
-    return {
-        'title': '3BR/2BA Home in Great Location',
-        'address': '123 Main St, Anytown, CA 12345',
-        'address_line1': '123 Main St',
-        'address_line2': '',
-        'city': 'Anytown',
-        'region': 'CA',
-        'zip_code': '12345',
-        'country': 'USA',
-        'price_range': '$450K - $550K',
-        'recommended_price': 500000,
-        'property_type': 'Single Family Home',
-        'square_feet': 2500,
-        'bedrooms': 3,
-        'bathrooms': 2,
-        'bathrooms_full': 2,
-        'bathrooms_half': 0,
-        'year_built': 1995,
-        'features': [
-            {
-                'feature_type': 'garage',
-                'count': 2,
-                'description': 'Two-car garage',
-                'features': ['detached'],
-            }
-        ],
-        'amenities': ['hardwood floors', 'updated kitchen'],
-        'highlights': ['Great curb appeal', 'Spacious lot'],
-        'description': 'Beautiful home in desirable neighborhood with recent updates.',
-        'similar_properties': [
-            {
-                'address': '124 Main St',
-                'price': 495000,
-                'bedrooms': 3,
-                'bathrooms': 2,
-                'property_type': 'Single Family Home',
-                'description': 'Similar property',
-            }
-        ],
-        'latitude': 40.7128,
-        'longitude': -74.0060,
-        'neighborhood_info': 'Established residential community',
-        'location_features': [],
-        'parking_total': 2,
-        'parking_garage': 2,
-        'parking_covered': 0,
-        'parking_open': 0,
-        'parking_carport': 0,
-        'parking_other': 0,
-        'parking_other_description': '',
-        'heating_type': ['forced air'],
-        'cooling_type': ['central ac'],
-        'water_type': ['municipal'],
-        'sewer_type': ['municipal'],
-        'foundation_type': ['concrete'],
-        'roof_type': ['asphalt shingles'],
-        'exterior_material': ['vinyl siding'],
-        'interior_material': ['drywall'],
-        'flooring_type': ['hardwood'],
-        'image_descriptions': [],
-    }
+    """Standard generated listing response using mock data"""
+    return get_mock_openrouter_listing_response()
 
 
 class TestGenerateListing:

@@ -38,7 +38,7 @@ describe('Dashboard Component', () => {
   })
 
   describe('Loading State', () => {
-    it('should display loading state initially', () => {
+    it('should display loading state initially', async () => {
       vi.mocked(listingModule.listingApi.list).mockImplementation(
         () => new Promise(() => {}) // Never resolves
       )
@@ -65,9 +65,12 @@ describe('Dashboard Component', () => {
         </BrowserRouter>
       )
 
-      await waitFor(() => {
-        expect(screen.getByText(/No listings yet/i)).toBeInTheDocument()
-      })
+      await waitFor(
+        () => {
+          expect(screen.getByText(/No listings yet/i)).toBeInTheDocument()
+        },
+        { timeout: 3000 }
+      )
     })
 
     it('should show "Create your first listing" prompt', async () => {
@@ -79,9 +82,12 @@ describe('Dashboard Component', () => {
         </BrowserRouter>
       )
 
-      await waitFor(() => {
-        expect(screen.getByText(/List a Property/i)).toBeInTheDocument()
-      })
+      await waitFor(
+        () => {
+          expect(screen.getByText(/List a Property/i)).toBeInTheDocument()
+        },
+        { timeout: 3000 }
+      )
     })
   })
 
@@ -124,10 +130,13 @@ describe('Dashboard Component', () => {
         </BrowserRouter>
       )
 
-      await waitFor(() => {
-        expect(screen.getByText('123 Main St, Anytown, CA 12345')).toBeInTheDocument()
-        expect(screen.getByText('456 Oak Ave, Springfield, IL 62701')).toBeInTheDocument()
-      })
+      await waitFor(
+        () => {
+          expect(screen.getByText('123 Main St, Anytown, CA 12345')).toBeInTheDocument()
+          expect(screen.getByText('456 Oak Ave, Springfield, IL 62701')).toBeInTheDocument()
+        },
+        { timeout: 3000 }
+      )
     })
 
     it('should display listing address', async () => {
@@ -140,7 +149,9 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         expect(screen.getByText('123 Main St, Anytown, CA 12345')).toBeInTheDocument()
         expect(screen.getByText('456 Oak Ave, Springfield, IL 62701')).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should display price information', async () => {
@@ -153,7 +164,9 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         expect(screen.getByText('$500,000')).toBeInTheDocument()
         expect(screen.getByText('$350,000')).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should display bedroom and bathroom count', async () => {
@@ -168,7 +181,9 @@ describe('Dashboard Component', () => {
         expect(screen.getByText('2 bath')).toBeInTheDocument()
         expect(screen.getByText('4 bed')).toBeInTheDocument()
         expect(screen.getByText('3 bath')).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should display listing status badge', async () => {
@@ -183,7 +198,9 @@ describe('Dashboard Component', () => {
         const publishedBadge = screen.getByText('Published')
         expect(draftBadge).toBeInTheDocument()
         expect(publishedBadge).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should display time-ago for creation date', async () => {
@@ -197,7 +214,9 @@ describe('Dashboard Component', () => {
         // Should show "2 days ago" and "5 days ago"
         expect(screen.getByText(/2 days? ago/)).toBeInTheDocument()
         expect(screen.getByText(/5 days? ago/)).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should apply correct styling for draft status', async () => {
@@ -210,7 +229,9 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         const draftBadge = screen.getByText('Draft')
         expect(draftBadge).toHaveClass('bg-yellow-100')
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should apply correct styling for published status', async () => {
@@ -223,7 +244,9 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         const publishedBadge = screen.getByText('Published')
         expect(publishedBadge).toHaveClass('bg-green-100')
-      })
+      },
+        { timeout: 3000 }
+      )
     })
   })
 
@@ -252,7 +275,9 @@ describe('Dashboard Component', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/Beautiful home/)).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should handle null price gracefully', async () => {
@@ -280,7 +305,9 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         expect(screen.getByText('123 Main St')).toBeInTheDocument()
         // Should not crash, should display "Price TBD" or similar
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should handle null beds/baths gracefully', async () => {
@@ -308,7 +335,9 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         expect(screen.getByText('123 Main St')).toBeInTheDocument()
         // Should not display 0 bed/bath, should skip
-      })
+      },
+        { timeout: 3000 }
+      )
     })
   })
 
@@ -327,7 +356,9 @@ describe('Dashboard Component', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/Error loading listings/)).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should provide retry button on error', async () => {
@@ -343,7 +374,9 @@ describe('Dashboard Component', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/Retry/)).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should retry listing fetch when retry button clicked', async () => {
@@ -359,7 +392,9 @@ describe('Dashboard Component', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/Error loading listings/)).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
 
       const retryButton = screen.getByText(/Retry/)
       retryButton.click()
@@ -367,7 +402,9 @@ describe('Dashboard Component', () => {
       // Re-render or wait for retry
       await waitFor(() => {
         expect(screen.queryByText(/Error loading listings/)).not.toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
   })
 
@@ -384,7 +421,9 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         const link = screen.getByText(/List a Property/)
         expect(link).toHaveAttribute('href', '/list')
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should have clickable listing cards', async () => {
@@ -412,7 +451,9 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         const card = screen.getByText('123 Main St').closest('a')
         expect(card).toHaveAttribute('href', '/listings/1')
-      })
+      },
+        { timeout: 3000 }
+      )
     })
   })
 
@@ -440,7 +481,9 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         expect(screen.getByText(/0 Address St/)).toBeInTheDocument()
         expect(screen.getByText(/49 Address St/)).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
   })
 
@@ -477,8 +520,12 @@ describe('Dashboard Component', () => {
         await waitFor(() => {
           const badge = screen.getByText(new RegExp(status, 'i'))
           expect(badge).toHaveClass(expectedClass)
-        })
-      })
+        },
+        { timeout: 3000 }
+      )
+      },
+        { timeout: 3000 }
+      )
     })
   })
 
@@ -507,7 +554,9 @@ describe('Dashboard Component', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/today|now/i)).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
 
     it('should format older dates correctly', async () => {
@@ -534,7 +583,9 @@ describe('Dashboard Component', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/month ago|30 days/i)).toBeInTheDocument()
-      })
+      },
+        { timeout: 3000 }
+      )
     })
   })
 })

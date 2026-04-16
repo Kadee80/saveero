@@ -6,44 +6,123 @@ Provides common setup, mocks, and test data used across test files.
 """
 
 import os
+import sys
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 from typing import Dict, Any
+from datetime import datetime, timedelta
+import json
 
 # Configure test environment
 os.environ['TESTING'] = 'true'
+os.environ['SUPABASE_URL'] = 'http://localhost:54321'
+os.environ['SUPABASE_SERVICE_ROLE_KEY'] = 'test-key'
+os.environ['OPENROUTER_API_KEY'] = 'test-key'
+os.environ['FRED_API_KEY'] = 'test-key'
+os.environ['JWT_SECRET'] = 'test-secret-key'
+
+
+@pytest.fixture
+def mock_supabase_client():
+    """
+    Mock Supabase client for testing with proper auth and table operations.
+    Provides fully mocked auth, database, and storage operations.
+    """
+    with patch('core.config.supabase') as mock_client:
+        # Mock auth client with comprehensive auth operations
+        mock_client.auth = MagicMock()
+        mock_client.auth.sign_up = MagicMock(return_value={
+            'user': {
+                'id': 'user-123',
+                'email': 'test@example.com',
+                'user_metadata': {'full_name': 'Test User'},
+                'aud': 'authenticated',
+                'created_at': '2024-01-01T00:00:00Z',
+            },
+            'session': {
+                'access_token': 'mock_token_123',
+                'refresh_token': 'mock_refresh_123',
+                'expires_in': 3600,
+                'expires_at': int((datetime.utcnow() + timedelta(hours=1)).timestamp()),
+            },
+            'error': None,
+        })
+
+        mock_client.auth.sign_in_with_password = MagicMock(return_value={
+            'user': {
+                'id': 'user-123',
+                'email': 'test@example.com',
+                'user_metadata': {},
+                'aud': 'authenticated',
+                'created_at': '2024-01-01T00:00:00Z',
+            },
+            'session': {
+                'access_token': 'mock_token_123',
+                'refresh_token': 'mock_refresh_123',
+                'expires_in': 3600,
+                'expires_at': int((datetime.utcnow() + timedelta(hours=1)).timestamp()),
+            },
+            'error': None,
+        })
+
+        mock_client.auth.sign_out = MagicMock(return_value={'error': None})
+
+        mock_client.auth.get_user = MagicMock(return_value={
+            'user': {
+                'id': 'user-123',
+                'email': 'test@example.com',
+                'email_confirmed_at': '2024-01-01T00:00:00Z',
+                'user_metadata': {'full_name': 'Test User'},
+                'aud': 'authenticated',
+                'created_at': '2024-01-01T00:00:00Z',
+            },
+            'error': None,
+        })
+
+        mock_client.auth.refresh_session = MagicMock(return_value={
+            'user': {
+                'id': 'user-123',
+                'email': 'test@example.com',
+                'aud': 'authenticated',
+            },
+            'session': {
+                'access_token': 'new_mock_token',
+                'refresh_token': 'new_mock_refresh',
+                'expires_in': 3600,
+                'expires_at': int((datetime.utcnow() + timedelta(hours=1)).timestamp()),
+            },
+            'error': None,
+        })
+
+        # Mock database client with table operations
+        mock_client.table = MagicMock()
+        mock_client.table_data = {}  # Store mock data
+
+        def mock_table(table_name):
+            table_mock = MagicMock()
+            table_mock.insert = MagicMock(return_value={'data': [{'id': 'new-id'}], 'error': None})
+            table_mock.select = MagicMock(return_value={'data': [], 'error': None})
+            table_mock.update = MagicMock(return_value={'data': [{}], 'error': None})
+            table_mock.delete = MagicMock(return_value={'error': None})
+            return table_mock
+
+        mock_client.table = mock_table
+
+        # Mock storage operations
+        mock_client.storage = MagicMock()
+        mock_client.storage.from_ = MagicMock(return_value=MagicMock(
+            upload=MagicMock(return_value={'path': 'uploads/file.jpg'}),
+            download=MagicMock(return_value=b'image_data'),
+            remove=MagicMock(return_value={}),
+        ))
+
+        yield mock_client
 
 
 @pytest.fixture
 def mock_supabase():
-    """
-    Mock Supabase client for testing.
-    Provides mocked auth, database, and storage operations.
-    """
+    """Alias for mock_supabase_client for backward compatibility"""
     with patch('core.config.supabase') as mock:
-        # Mock auth client
-        mock.auth = MagicMock()
-        mock.auth.sign_up.return_value = {
-            'user': {'id': 'user-123', 'email': 'test@example.com'},
-            'error': None,
-        }
-        mock.auth.sign_in_with_password.return_value = {
-            'user': {'id': 'user-123', 'email': 'test@example.com'},
-            'session': {
-                'access_token': 'mock_token_123',
-                'refresh_token': 'mock_refresh_123',
-            },
-            'error': None,
-        }
-        mock.auth.sign_out.return_value = {'error': None}
-        mock.auth.get_user.return_value = {
-            'user': {'id': 'user-123', 'email': 'test@example.com'},
-            'error': None,
-        }
-
-        # Mock database client
-        mock.table = MagicMock()
-
         yield mock
 
 
@@ -301,9 +380,76 @@ def pytest_configure(config):
     )
 
 
-# Pytest hooks
+@pytest.fixture
+def mock_openrouter_api():
+    """
+    Mock OpenRouter API responses for listing generation.
+    Returns realistic AI-generated listing data.
+    """
+    with patch('api.listing_wizard_routes.openrouter_api') as mock:
+        mock.generate_listing = MagicMock(return_value={
+            'title': '3BR/2BA Home in Great Location',
+            'description': 'Beautiful home in desirable neighborhood',
+            'price_range': '$450K - $550K',
+        })
+        yield mock
+
+
+@pytest.fixture
+def mock_fred_api():
+    """
+    Mock FRED API for mortgage rate data.
+    Returns current mortgage rates.
+    """
+    with patch('mortgage.fred_client.get_mortgage_rates') as mock:
+        mock.return_value = {
+            'mortgage_30y': 6.75,
+            'mortgage_15y': 6.25,
+            'mortgage_5y_arm': 5.99,
+            'timestamp': datetime.utcnow().isoformat(),
+        }
+        yield mock
+
+
+@pytest.fixture
+def mock_image_analyzer():
+    """
+    Mock image analysis for listing photo descriptions.
+    """
+    with patch('api.listing_wizard_routes.analyze_image') as mock:
+        mock.return_value = {
+            'description': 'Front exterior with landscaping',
+            'property_features': ['driveway', 'garage', 'landscape'],
+        }
+        yield mock
+
+
+@pytest.fixture
+def mock_jwt_handler():
+    """
+    Mock JWT token generation and validation.
+    """
+    with patch('core.auth.create_access_token') as mock_create, \
+         patch('core.auth.verify_token') as mock_verify:
+        mock_create.return_value = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEyMyIsImV4cCI6OTk5OTk5OTk5OX0.test'
+        mock_verify.return_value = {'sub': 'user-123', 'email': 'test@example.com'}
+        yield mock_create, mock_verify
+
+
+# Pytest hooks and configuration
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_makereport(item, call):
     """Customize test reporting."""
     pass
+
+
+def pytest_collection_modifyitems(config, items):
+    """
+    Mark slow tests and integration tests automatically.
+    """
+    for item in items:
+        if 'integration' in item.nodeid:
+            item.add_marker(pytest.mark.integration)
+        if 'slow' in item.nodeid:
+            item.add_marker(pytest.mark.slow)

@@ -13,34 +13,64 @@ Tests for authentication and JWT token handling:
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
+import os
 
 from main import app
+from tests.mock_responses import (
+    get_mock_supabase_session,
+    get_mock_supabase_user,
+    get_mock_auth_error,
+)
+
+# Load test environment
+if os.path.exists('tests/.env.test'):
+    from dotenv import load_dotenv
+    load_dotenv('tests/.env.test')
 
 client = TestClient(app)
 
 
 @pytest.fixture
-def mock_supabase():
-    """Fixture to mock Supabase auth client"""
-    with patch('api.listing_wizard_routes.supabase.auth') as mock:
-        yield mock
+def mock_supabase_auth():
+    """Fixture to mock Supabase auth client with realistic responses"""
+    with patch('api.listing_wizard_routes.supabase.auth') as mock_auth:
+        # Mock sign up
+        mock_auth.sign_up.return_value = get_mock_supabase_session()
+
+        # Mock sign in
+        mock_auth.sign_in_with_password.return_value = get_mock_supabase_session()
+
+        # Mock get user
+        mock_auth.get_user.return_value = {
+            'user': get_mock_supabase_user(),
+            'error': None,
+        }
+
+        # Mock refresh session
+        mock_auth.refresh_session.return_value = get_mock_supabase_session()
+
+        # Mock sign out
+        mock_auth.sign_out.return_value = {'error': None}
+
+        yield mock_auth
 
 
 @pytest.fixture
 def mock_user():
-    """Standard test user"""
-    return {
-        'id': 'user-123',
-        'email': 'test@example.com',
-        'email_confirmed_at': '2024-01-01T00:00:00',
-        'user_metadata': {},
-    }
+    """Standard test user fixture using mock responses"""
+    return get_mock_supabase_user()
 
 
 @pytest.fixture
 def valid_jwt_token():
     """Valid JWT token for testing"""
     return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEyMyIsImV4cCI6OTk5OTk5OTk5OX0.test'
+
+
+@pytest.fixture
+def mock_supabase(mock_supabase_auth):
+    """Backward compatibility fixture"""
+    return mock_supabase_auth
 
 
 class TestSignup:
