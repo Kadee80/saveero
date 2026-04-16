@@ -47,6 +47,51 @@ The Saveero frontend is a **React 18 + Vite 5 + TypeScript SPA** that provides a
 - Development workflow (adding pages, components, API calls)
 - Deployment and performance optimization strategies
 
+---
+
+## Backend Architecture
+
+The saveero backend is a **FastAPI-based Python service** that powers the core AI listing generation, property management, and authentication workflows.
+
+**Key highlights:**
+- **Async-first design** — Concurrent API calls to OpenRouter, Supabase, and other services
+- **Secure authentication** — Supabase JWT with ES256 validation, no runtime JWKS fetches
+- **Row-level security** — Multi-tenant data isolation enforced at the database level
+- **Image analysis pipeline** — Vision models + LLM orchestration for photo → MLS listing
+- **Intelligent caching** — Disk-based image cache prevents re-analyzing the same photos
+
+**Main API endpoints:**
+- **POST /api/listings/generate** — Upload photos, receive AI-generated listing with pricing and comps
+- **POST /api/listings/save** — Persist listing to database
+- **GET /api/listings** — List all user properties
+- **GET /api/listings/{id}** — Get single property with comparables
+- **GET /api/health** — Health check
+
+**External integrations:**
+- **OpenRouter** — Vision (Gemini 2.5-Flash) and LLM models (Claude Sonnet, Perplexity)
+- **Supabase** — PostgreSQL database + JWT authentication
+- **FRED API** — Live mortgage rates (integrated on frontend)
+
+**Tech stack:**
+- FastAPI + Python 3.11
+- Supabase (PostgreSQL + Auth)
+- OpenRouter (multimodal AI)
+- LangChain + asyncio for concurrent processing
+- Render.com for hosting
+
+**For comprehensive architecture documentation**, see **[BACKEND.md](./BACKEND.md)** which covers:
+- Detailed system architecture and data flow
+- Complete folder structure and file purposes
+- All API endpoints with request/response examples
+- Database schema and row-level security policies
+- JWT authentication and authorization
+- External service integrations (OpenRouter, Supabase, FRED)
+- AI listing generation workflow (7-step pipeline)
+- Error handling, security, and performance considerations
+- Local development setup and testing
+- Deployment instructions for Render.com
+- Troubleshooting guide and future improvements
+
 ### Quick Start
 
 ```bash
@@ -88,24 +133,33 @@ cd saveero
 
 ### 2. Backend setup
 ```bash
+# Install dependencies
 pip install -r requirements.txt
-```
 
-Copy and fill in the backend env file:
-```bash
+# Copy and fill in the backend env file
 cp .env.example .env
 ```
 
-Run the schema migration in your Supabase SQL Editor:
-```sql
--- paste contents of db/migrations/001_initial_schema.sql
-```
+Edit `.env` with your Supabase and OpenRouter keys:
+- **SUPABASE_URL** — From Supabase dashboard Settings → API
+- **SUPABASE_SERVICE_ROLE_KEY** — From Supabase dashboard Settings → API
+- **SUPABASE_JWT_JWK** — Fetch from `https://<your-project>.supabase.co/auth/v1/.well-known/jwks.json`
+- **OPENROUTER_API_KEY** — From openrouter.ai
+
+Run the database schema migration:
+1. Log into your Supabase dashboard
+2. Go to SQL Editor → "New Query"
+3. Copy the contents of `db/migrations/001_initial_schema.sql`
+4. Paste and execute
 
 Start the backend:
 ```bash
 python3 -m uvicorn main:app --reload
 ```
-API available at `http://localhost:8000`
+
+Backend API available at `http://localhost:8000`
+- Access docs at `http://localhost:8000/docs` (Swagger UI)
+- Health check: `curl http://localhost:8000/api/health`
 
 ### 3. Frontend setup
 ```bash
