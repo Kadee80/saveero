@@ -1,3 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Image analysis cache
+.image_cache/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Frontend build output
+webapp/dist/
+webapp/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
 # Offshore-dev scratch notes — not canonical
 TEST_FILES_CREATED.txt
 webapp/package.json.test-deps
