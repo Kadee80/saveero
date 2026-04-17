@@ -38,6 +38,7 @@ import {
   Shield,
   Landmark,
   DollarSign,
+  Save,
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -45,8 +46,61 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { analyzeMortgage, type MortgageSummary, type AmortizationRow } from '@/lib/mortgage';
+import type { AmortizationRow } from '@/lib/mortgage';
+import {
+  analyzeMortgage as analyzeMortgageApi,
+  saveAnalysis,
+  type AnalyzeMortgageResponse,
+} from '@/api/mortgageApi';
 import { fetchCurrentRates, type CurrentRates } from '@/api/ratesApi';
+
+/**
+ * UI-shaped mortgage summary. Mirrors the camelCase shape the original
+ * page was built against so the JSX doesn't need to change. Built by
+ * adapting the backend's snake_case response.
+ */
+interface MortgageSummary {
+  loanAmount: number;
+  ltv: number;
+  monthlyPrincipalInterest: number;
+  monthly: {
+    principal: number;
+    interest: number;
+    pmi: number;
+    propertyTax: number;
+    insurance: number;
+    hoa: number;
+    total: number;
+  };
+  totalInterestPaid: number;
+  totalCostOfLoan: number;
+  amortization: AmortizationRow[];
+  pmiRequired: boolean;
+  pmiMonths: number;
+}
+
+/** Convert backend snake_case response to the camelCase shape the UI uses. */
+function adaptSummary(r: AnalyzeMortgageResponse): MortgageSummary {
+  return {
+    loanAmount: r.loan_amount,
+    ltv: r.ltv,
+    monthlyPrincipalInterest: r.monthly_principal_interest,
+    monthly: {
+      principal: r.monthly.principal,
+      interest: r.monthly.interest,
+      pmi: r.monthly.pmi,
+      propertyTax: r.monthly.property_tax,
+      insurance: r.monthly.insurance,
+      hoa: r.monthly.hoa,
+      total: r.monthly.total,
+    },
+    totalInterestPaid: r.total_interest_paid,
+    totalCostOfLoan: r.total_cost_of_loan,
+    amortization: r.amortization,
+    pmiRequired: r.pmi_required,
+    pmiMonths: r.pmi_drop_off_month,
+  };
+}
 
 // ─── Form shape ─────────────────────────────────────────────────────────────
 
@@ -224,6 +278,9 @@ export default function MortgageCalculator() {
   const [loadingRates, setLoadingRates] = useState(false);
   const [summary, setSummary] = useState<MortgageSummary | null>(null);
   const [showAmortization, setShowAmortization] = useState(false);
+  const [calcError, setCalcError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
@@ -237,22 +294,91 @@ export default function MortgageCalculator() {
     },
   });
 
-  // Auto-recalculate whenever any field changes
+  // Auto-recalculate whenever any field changes — now via the backend engine.
+  // A tiny debounce keeps us from firing a request on every keystroke.
   const watchedValues = watch();
   useEffect(() => {
     const v = watchedValues;
-    if (!v.purchasePrice || !v.downPayment || !v.annualRatePercent) return;
-    const result = analyzeMortgage({
-      purchasePrice: Number(v.purchasePrice),
-      downPayment: Number(v.downPayment),
-      annualRatePercent: Number(v.annualRatePercent),
-      termYears: Number(v.termYears),
-      annualPropertyTaxPercent: Number(v.annualPropertyTaxPercent),
-      annualInsuranceDollars: Number(v.annualInsuranceDollars),
-      monthlyHoa: Number(v.monthlyHoa),
-    });
-    setSummary(result);
+    // Require the minimum set of fields before we call the API.
+    if (
+      !v.purchasePrice || v.downPayment === undefined || v.downPayment === null ||
+      !v.annualRatePercent
+    ) return;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      analyzeMortgageApi({
+        purchase_price: Number(v.purchasePrice),
+        down_payment: Number(v.downPayment),
+        annual_rate_percent: Number(v.annualRatePercent),
+        term_years: Number(v.termYears),
+        annual_property_tax_percent: Number(v.annualPropertyTaxPercent),
+        annual_insurance_dollars: Number(v.annualInsuranceDollars),
+        monthly_hoa: Number(v.monthlyHoa),
+      })
+        .then((r) => {
+          if (controller.signal.aborted) return;
+          setSummary(adaptSummary(r));
+          setCalcError(null);
+          setSaveState('idle'); // inputs changed — previous save no longer reflects shown result
+        })
+        .catch((err: unknown) => {
+          if (controller.signal.aborted) return;
+          const msg = err instanceof Error ? err.message : 'Calculation failed';
+          setCalcError(msg);
+        });
+    }, 150);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
   }, [JSON.stringify(watchedValues)]);
+
+  const handleSave = useCallback(async () => {
+    if (!summary) return;
+    setSaveState('saving');
+    setSaveMessage(null);
+    try {
+      const v = watchedValues;
+      await saveAnalysis({
+        analysis_type: 'analyze',
+        label: `$${Number(v.purchasePrice).toLocaleString()} — ${v.termYears}yr @ ${v.annualRatePercent}%`,
+        inputs: {
+          purchase_price: Number(v.purchasePrice),
+          down_payment: Number(v.downPayment),
+          annual_rate_percent: Number(v.annualRatePercent),
+          term_years: Number(v.termYears),
+          annual_property_tax_percent: Number(v.annualPropertyTaxPercent),
+          annual_insurance_dollars: Number(v.annualInsuranceDollars),
+          monthly_hoa: Number(v.monthlyHoa),
+        },
+        result: {
+          loan_amount: summary.loanAmount,
+          ltv: summary.ltv,
+          monthly_principal_interest: summary.monthlyPrincipalInterest,
+          monthly: {
+            principal: summary.monthly.principal,
+            interest: summary.monthly.interest,
+            pmi: summary.monthly.pmi,
+            property_tax: summary.monthly.propertyTax,
+            insurance: summary.monthly.insurance,
+            hoa: summary.monthly.hoa,
+            total: summary.monthly.total,
+          },
+          total_interest_paid: summary.totalInterestPaid,
+          total_cost_of_loan: summary.totalCostOfLoan,
+          pmi_required: summary.pmiRequired,
+          pmi_drop_off_month: summary.pmiMonths,
+        },
+      });
+      setSaveState('saved');
+      setSaveMessage('Saved to your analyses');
+    } catch (err) {
+      setSaveState('error');
+      setSaveMessage(err instanceof Error ? err.message : 'Save failed');
+    }
+  }, [summary, watchedValues]);
 
   const loadRates = useCallback(async () => {
     setLoadingRates(true);
@@ -474,6 +600,14 @@ export default function MortgageCalculator() {
         </div>
 
         {/* ── Right: Results ── */}
+        {calcError && !summary && (
+          <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <span className="font-medium">Calculation error:</span> {calcError}
+            </div>
+          </div>
+        )}
         {summary && (
           <div className="space-y-4">
             {/* Monthly total */}
@@ -546,6 +680,37 @@ export default function MortgageCalculator() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Save analysis */}
+            <div className="space-y-2">
+              <Button
+                type="button"
+                onClick={handleSave}
+                disabled={saveState === 'saving' || saveState === 'saved'}
+                className="w-full"
+                variant={saveState === 'saved' ? 'outline' : 'default'}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {saveState === 'saving'
+                  ? 'Saving…'
+                  : saveState === 'saved'
+                    ? 'Saved'
+                    : 'Save this analysis'}
+              </Button>
+              {saveMessage && (
+                <p
+                  className={cn(
+                    'text-xs',
+                    saveState === 'error' ? 'text-red-600' : 'text-muted-foreground',
+                  )}
+                >
+                  {saveMessage}
+                </p>
+              )}
+              {calcError && (
+                <p className="text-xs text-red-600">Latest update failed: {calcError}</p>
+              )}
+            </div>
           </div>
         )}
       </div>

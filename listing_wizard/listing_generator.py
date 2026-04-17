@@ -27,9 +27,9 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from langchain.schema import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import PydanticOutputParser
+from langchain_openai import ChatOpenAI
 
 from .image_describer import AsyncImageDescriber
 from .models import GeneratedListing, PropertyFeature, SimilarProperties, SimilarProperty

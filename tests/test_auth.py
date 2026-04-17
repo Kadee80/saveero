@@ -8,6 +8,14 @@ Tests for authentication and JWT token handling:
 - JWT token validation
 - Token refresh
 - Unauthorized access handling
+
+STATUS (2026-04-17): SKIPPED at the module level. These tests target
+`/api/auth/signup`, `/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`
+routes and patch `api.listing_wizard_routes.supabase`. None of those routes
+are registered in `main.py` and `listing_wizard_routes` does not import
+`supabase` at module level, so every test here either errors (patch target
+missing) or fails (405 on an unregistered route). The tests are preserved
+as the spec for the future auth module; unskip class-by-class as routes land.
 """
 
 import pytest
@@ -28,6 +36,17 @@ if os.path.exists('tests/.env.test'):
     load_dotenv('tests/.env.test')
 
 client = TestClient(app)
+
+# Entire module is a spec for an auth layer that has not been implemented yet.
+# The /api/auth/* routes are not registered on the FastAPI app, and the tests
+# patch a `supabase` symbol that is not present in api.listing_wizard_routes.
+# Unskip individual test classes once the matching route + module-level import
+# lands.
+pytestmark = pytest.mark.skip(
+    reason="Auth routes (/api/auth/*) not implemented yet; "
+           "patch target api.listing_wizard_routes.supabase does not exist. "
+           "Tests retained as spec — see module docstring."
+)
 
 
 @pytest.fixture

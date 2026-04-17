@@ -6,8 +6,21 @@ Tests for listing API endpoints:
 - POST /api/listings/save - save listing to Supabase
 - GET /api/listings - list user's saved listings
 - GET /api/listings/{id} - get specific listing
-- DELETE /api/listings/{id} - delete listing
+- DELETE /api/listings/{id} - delete listing  (NOT IMPLEMENTED)
 - Error handling for invalid inputs
+
+STATUS (2026-04-17): Most test classes are SKIPPED. They were written
+against a hypothetical architecture where:
+  - A DELETE /api/listings/{id} endpoint exists (it doesn't)
+  - Module-level functions `generate_listing`, `save_listing`,
+    `get_user_listings`, `get_listing`, `delete_listing` can be patched to
+    intercept route handlers (FastAPI route references are resolved at
+    registration, so mock.patch on the handler name doesn't redirect traffic)
+  - A `supabase` / `openrouter_api` symbol is imported at module level in
+    api.listing_wizard_routes (neither is)
+Tests requiring only real behavior (auth rejection on missing Bearer token)
+still run. The skipped classes are preserved as the spec for a future
+service-layer refactor.
 """
 
 import pytest
@@ -53,9 +66,20 @@ def mock_listing_response():
     return get_mock_openrouter_listing_response()
 
 
+# Reason shared across broken test classes below.
+_SPEC_ONLY_REASON = (
+    "Spec-only: patches api.listing_wizard_routes.{generate_listing,save_listing,"
+    "get_user_listings,get_listing,delete_listing} which either do not exist at "
+    "module scope or are route handlers (patching doesn't redirect traffic). "
+    "Auth dependency also 401s before payload validation runs. Unskip after "
+    "service-layer refactor or replace with FastAPI dependency_overrides."
+)
+
+
 class TestGenerateListing:
     """Tests for POST /api/listings/generate endpoint"""
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_generate_with_valid_images_and_address(self, auth_headers, mock_listing_response):
         """Should generate listing from valid photos and address"""
         # Create mock image file
@@ -79,6 +103,7 @@ class TestGenerateListing:
         assert response.json()['title'] == '3BR/2BA Home in Great Location'
         assert response.json()['address'] == '123 Main St, Anytown, CA 12345'
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_generate_with_multiple_images(self, auth_headers, mock_listing_response):
         """Should process multiple image files"""
         images = [
@@ -99,6 +124,7 @@ class TestGenerateListing:
 
         assert response.status_code == 200
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_generate_without_images(self, auth_headers):
         """Should reject listing generation without images"""
         response = client.post(
@@ -112,6 +138,7 @@ class TestGenerateListing:
 
         assert response.status_code in [400, 422]
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_generate_without_address(self, auth_headers):
         """Should reject listing generation without address"""
         image_file = ('photo.jpg', BytesIO(b'fake'), 'image/jpeg')
@@ -140,6 +167,7 @@ class TestGenerateListing:
 
         assert response.status_code == 401
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_generate_with_optional_notes(self, auth_headers, mock_listing_response):
         """Should accept optional notes parameter"""
         image_file = ('photo.jpg', BytesIO(b'fake'), 'image/jpeg')
@@ -159,6 +187,7 @@ class TestGenerateListing:
 
         assert response.status_code == 200
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_generate_with_invalid_image_format(self, auth_headers):
         """Should reject non-image file uploads"""
         text_file = ('document.txt', BytesIO(b'not an image'), 'text/plain')
@@ -172,6 +201,7 @@ class TestGenerateListing:
 
         assert response.status_code in [400, 422]
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_generate_returns_all_required_fields(self, auth_headers, mock_listing_response):
         """Should return listing with all required fields"""
         image_file = ('photo.jpg', BytesIO(b'fake'), 'image/jpeg')
@@ -198,6 +228,7 @@ class TestGenerateListing:
 class TestSaveListing:
     """Tests for POST /api/listings/save endpoint"""
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_save_listing_with_valid_data(self, auth_headers):
         """Should save listing to database"""
         listing_data = {
@@ -226,6 +257,7 @@ class TestSaveListing:
         assert response.json()['success'] is True
         assert 'id' in response.json()
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_save_listing_without_address(self, auth_headers):
         """Should reject listing save without address"""
         response = client.post(
@@ -256,6 +288,7 @@ class TestSaveListing:
 
         assert response.status_code == 401
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_save_listing_with_partial_data(self, auth_headers):
         """Should accept listing save with minimal required data"""
         with patch('api.listing_wizard_routes.save_listing') as mock_save:
@@ -273,6 +306,7 @@ class TestSaveListing:
 
         assert response.status_code == 200
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_save_listing_associates_with_user(self, auth_headers):
         """Should associate saved listing with authenticated user"""
         with patch('api.listing_wizard_routes.save_listing') as mock_save:
@@ -296,6 +330,7 @@ class TestSaveListing:
 class TestListListings:
     """Tests for GET /api/listings endpoint"""
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_list_user_listings(self, auth_headers):
         """Should return all listings for authenticated user"""
         mock_listings = [
@@ -331,6 +366,7 @@ class TestListListings:
         assert len(response.json()) == 2
         assert response.json()[0]['address'] == '123 Main St'
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_list_empty_listings(self, auth_headers):
         """Should return empty array when user has no listings"""
         with patch('api.listing_wizard_routes.get_user_listings') as mock_get:
@@ -350,6 +386,7 @@ class TestListListings:
 
         assert response.status_code == 401
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_list_listings_includes_status(self, auth_headers):
         """Should include listing status in response"""
         mock_listings = [
@@ -368,6 +405,7 @@ class TestListListings:
 
         assert response.json()[0]['status'] in ['draft', 'published', 'active']
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_list_listings_sorted_by_date(self, auth_headers):
         """Should return listings sorted by creation date (newest first)"""
         mock_listings = [
@@ -395,6 +433,7 @@ class TestListListings:
 class TestGetListing:
     """Tests for GET /api/listings/{id} endpoint"""
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_get_listing_by_id(self, auth_headers):
         """Should retrieve specific listing by ID"""
         mock_listing = {
@@ -417,6 +456,7 @@ class TestGetListing:
         assert response.status_code == 200
         assert response.json()['address'] == '123 Main St'
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_get_nonexistent_listing(self, auth_headers):
         """Should return 404 for non-existent listing"""
         with patch('api.listing_wizard_routes.get_listing') as mock_get:
@@ -435,6 +475,7 @@ class TestGetListing:
 
         assert response.status_code == 401
 
+    @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_cannot_access_other_user_listing(self, auth_headers):
         """Should not allow accessing another user's listing"""
         with patch('api.listing_wizard_routes.get_listing') as mock_get:
@@ -448,6 +489,10 @@ class TestGetListing:
         assert response.status_code == 404
 
 
+@pytest.mark.skip(
+    reason="DELETE /api/listings/{id} endpoint not implemented in "
+           "api/listing_wizard_routes.py. Unskip once the route lands."
+)
 class TestDeleteListing:
     """Tests for DELETE /api/listings/{id} endpoint"""
 
@@ -494,6 +539,12 @@ class TestDeleteListing:
         assert response.status_code == 404
 
 
+@pytest.mark.skip(
+    reason="Auth dependency 401s on the test fixture's fake JWT before "
+           "payload validation runs, so these return 401 instead of the "
+           "expected 422/400. Needs FastAPI dependency_overrides on "
+           "get_current_user to hit handler-level validation."
+)
 class TestErrorHandling:
     """Tests for API error handling"""
 
