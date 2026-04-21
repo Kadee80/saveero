@@ -259,12 +259,12 @@ function FieldInput({
 
   return (
     <div className="space-y-1">
-      <Label htmlFor={def.key} className="text-xs font-medium text-muted-foreground">
+      <Label htmlFor={def.key} className="text-xs font-semibold text-slate-700">
         {def.label}
       </Label>
       <div className="relative">
         {prefix && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
             {prefix}
           </span>
         )}
@@ -277,7 +277,7 @@ function FieldInput({
           onChange={(e) => onChange(Number(e.target.value))}
         />
         {suffix && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
             {suffix}
           </span>
         )}
@@ -315,7 +315,7 @@ function ComparisonTable({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <tr className="border-b text-left text-xs font-semibold uppercase tracking-wide text-slate-700">
             <th className="py-2 pr-3 font-medium">Metric</th>
             {slugs.map((s) => (
               <th key={s} className="py-2 pr-3 text-right font-medium">
@@ -328,8 +328,8 @@ function ComparisonTable({
           {rows.map(({ label, row, hint }) => (
             <tr key={label} className="border-b last:border-0">
               <td className="py-2 pr-3">
-                <div className="font-medium">{label}</div>
-                {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
+                <div className="font-medium text-slate-900">{label}</div>
+                {hint && <div className="text-xs text-slate-500">{hint}</div>}
               </td>
               {slugs.map((s) => {
                 const v = row[s]
@@ -368,10 +368,10 @@ function Stat({
     tone === 'good' ? 'text-emerald-700'
     : tone === 'bad' ? 'text-red-700'
     : tone === 'warn' ? 'text-amber-700'
-    : 'text-foreground'
+    : 'text-slate-900'
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
         {label}
       </div>
       <div className={cn('mt-0.5 text-base font-semibold tabular-nums', toneCls)}>
@@ -384,8 +384,8 @@ function Stat({
 function KV({ k, v, bold }: { k: string; v: string; bold?: boolean }) {
   return (
     <div className="flex justify-between text-sm">
-      <span className="text-muted-foreground">{k}</span>
-      <span className={cn('tabular-nums', bold && 'font-semibold')}>{v}</span>
+      <span className="text-slate-600">{k}</span>
+      <span className={cn('tabular-nums text-slate-900', bold && 'font-semibold')}>{v}</span>
     </div>
   )
 }
@@ -432,7 +432,7 @@ export default function DecisionMap() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Decision Map</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">
             Five paths, one view. Compare staying, refinancing, selling &amp; buying,
             renting the house out, or renting it out <em>and</em> buying — over the
             hold period you choose. Numbers tie to your workbook cell-for-cell.
@@ -502,8 +502,8 @@ export default function DecisionMap() {
           {!result && !loading && (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-                <Compass className="h-8 w-8 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
+                <Compass className="h-8 w-8 text-slate-500" />
+                <p className="text-sm text-slate-600">
                   Adjust the inputs on the left, then click <b>Recalculate</b> to
                   run all five scenarios.
                 </p>
@@ -536,9 +536,9 @@ function DecisionSummary({ result }: { result: RunAllResponse }) {
   const pr = decision_map.priority_rankings
 
   return (
-    <Card className="border-primary/30 bg-primary/5">
+    <Card className="border-blue-300 bg-blue-50">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle className="flex items-center gap-2 text-base text-slate-900">
           <Compass className="h-4 w-4" />
           Recommendation over {decision_map.selected_hold_period_years} years
         </CardTitle>
@@ -565,7 +565,7 @@ function DecisionSummary({ result }: { result: RunAllResponse }) {
         </div>
 
         <div className="border-t pt-4">
-          <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
             Priority rankings
           </div>
           <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
@@ -647,7 +647,7 @@ function FeasibilityStrip({ result }: { result: RunAllResponse }) {
           tone={f.requires_monthly_subsidy === 'No' ? 'good' : 'warn'}
         />
         <div className="col-span-2 md:col-span-4 border-t pt-3">
-          <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
             Rent Out &amp; Buy liquidity
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -659,15 +659,15 @@ function FeasibilityStrip({ result }: { result: RunAllResponse }) {
             >
               {f.rent_out_buy_liquidity_status}
             </span>
-            <span className="text-muted-foreground">
+            <span className="text-slate-700">
               Upfront cash required:{' '}
-              <b className="tabular-nums text-foreground">
+              <b className="tabular-nums text-slate-900">
                 {formatCurrency(f.rent_out_buy_upfront_cash_required)}
               </b>
             </span>
-            <span className="text-muted-foreground">
+            <span className="text-slate-700">
               Available:{' '}
-              <b className="tabular-nums text-foreground">
+              <b className="tabular-nums text-slate-900">
                 {formatCurrency(f.available_cash_for_new_purchase)}
               </b>
             </span>
@@ -901,7 +901,7 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-1.5">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
             Upfront cash
           </div>
           <KV k="Total upfront cash needed" v={formatCurrency(r.total_upfront_cash_needed)} />
@@ -913,7 +913,7 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
           />
         </div>
         <div className="space-y-1.5">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
             Monthly housing (net)
           </div>
           <KV
@@ -931,7 +931,7 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
           />
         </div>
         <div className="space-y-1.5 md:col-span-2 border-t pt-3">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
             Horizon
           </div>
           <KV
@@ -983,7 +983,7 @@ function AuditStrip({ result }: { result: RunAllResponse }) {
             <div>
               <span className="font-medium">{c.name}</span>
               {c.notes && (
-                <div className="text-xs text-muted-foreground">{c.notes}</div>
+                <div className="text-xs text-slate-600">{c.notes}</div>
               )}
             </div>
             <Badge
