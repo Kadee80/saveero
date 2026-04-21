@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Home, Calculator, GitCompare, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
+import { LayoutDashboard, Home, Calculator, GitCompare, Compass, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import { cn } from '@/lib/utils'
 import { supabase, signOut } from '@/api/auth'
@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import ListProperty from './pages/ListProperty'
 import MortgageCalculator from './pages/MortgageCalculator'
 import ScenarioComparison from './pages/ScenarioComparison'
+import DecisionMap from './pages/DecisionMap'
 import Login from './pages/Login'
 
 const navItems = [
@@ -15,6 +16,7 @@ const navItems = [
   { to: '/list-property',       label: 'List Property', icon: Home },
   { to: '/mortgage-calculator', label: 'Mortgage',       icon: Calculator },
   { to: '/scenarios',           label: 'Compare',        icon: GitCompare },
+  { to: '/decision-map',        label: 'Decision Map',   icon: Compass },
 ]
 
 export default function App() {
@@ -129,6 +131,7 @@ export default function App() {
             <Route path="/list-property"       element={<ListProperty />} />
             <Route path="/mortgage-calculator" element={<MortgageCalculator />} />
             <Route path="/scenarios"           element={<ScenarioComparison />} />
+            <Route path="/decision-map"        element={<DecisionMap />} />
           </Routes>
         </div>
         <footer className="text-center text-xs text-muted-foreground py-4">
