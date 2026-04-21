@@ -1,0 +1,16 @@
+{
+  "buildCommand": "cd webapp && npm install && npm run build",
+  "outputDirectory": "webapp/dist",
+  "installCommand": "echo 'skip root install — webapp installs its own deps'",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/fred-proxy/:path*",
+      "destination": "https://api.stlouisfed.org/fred/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://saveero-7nu9.onrender.com/api/:path*"
+    }
+  ]
+}
