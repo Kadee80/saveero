@@ -165,7 +165,8 @@ class TestGenerateListing:
             files={'images': image_file},
         )
 
-        assert response.status_code == 401
+        # HTTPBearer() returns 403 when the Authorization header is missing
+        assert response.status_code == 403
 
     @pytest.mark.skip(reason=_SPEC_ONLY_REASON)
     def test_generate_with_optional_notes(self, auth_headers, mock_listing_response):

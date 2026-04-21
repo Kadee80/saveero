@@ -26,7 +26,7 @@ import logging
 from dataclasses import asdict
 from typing import List
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from postgrest.exceptions import APIError as PostgrestAPIError
 
 from core.auth import CurrentUser
@@ -277,9 +277,10 @@ def get_analysis(analysis_id: str, user: CurrentUser) -> dict:
 # DELETE /api/mortgage/analyses/{id}
 # ---------------------------------------------------------------------------
 
-@router.delete("/mortgage/analyses/{analysis_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_analysis(analysis_id: str, user: CurrentUser) -> None:
+@router.delete("/mortgage/analyses/{analysis_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+def delete_analysis(analysis_id: str, user: CurrentUser):
     """Delete a saved analysis. No-op if it doesn't exist (by design)."""
     db = get_db()
     user_id: str = user["sub"]
     db.table("mortgage_analyses").delete().eq("id", analysis_id).eq("user_id", user_id).execute()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
