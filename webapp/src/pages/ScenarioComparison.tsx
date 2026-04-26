@@ -29,7 +29,7 @@
  * <ScenarioComparison />
  */
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Trophy, RefreshCw, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Trophy, RefreshCw, AlertCircle, Shield, Zap, Target } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,6 +38,19 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { analyzeMortgage, calcMonthlyPayment } from '@/lib/mortgage';
 import { fetchCurrentRates, type CurrentRates } from '@/api/ratesApi';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+  Label as ChartLabel,
+} from 'recharts';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -85,6 +98,17 @@ const DEFAULT_SCENARIOS: Scenario[] = [
 const SCENARIO_COLORS = ['border-blue-400', 'border-violet-400', 'border-emerald-400'];
 const SCENARIO_BG     = ['bg-blue-50',      'bg-violet-50',      'bg-emerald-50'];
 const SCENARIO_TEXT   = ['text-blue-700',   'text-violet-700',   'text-emerald-700'];
+
+/**
+ * Chart color scheme for scenarios (hex format for recharts)
+ */
+const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#10b981'];
+
+/**
+ * Hero icons and taglines for scenario cards by index
+ */
+const SCENARIO_ICONS = [Shield, Zap, Target];
+const SCENARIO_TAGLINES = ['Conservative play', 'Aggressive play', 'Tight discipline'];
 
 /**
  * Generate a short random ID for new scenarios
@@ -152,6 +176,14 @@ interface ScenarioResult {
   pmi: number;
   /** Equity built in first 5 years (down payment + principal paid) */
   equityY5: number;
+  /** Monthly breakdown (P&I, tax, insurance, PMI, HOA) */
+  monthlyBreakdown?: {
+    principalInterest: number;
+    tax: number;
+    insurance: number;
+    pmi: number;
+    hoa: number;
+  };
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -176,6 +208,7 @@ export default function ScenarioComparison() {
   const [scenarios, setScenarios]         = useState<Scenario[]>(DEFAULT_SCENARIOS);
   const [rates, setRates]                 = useState<CurrentRates | null>(null);
   const [loadingRates, setLoadingRates]   = useState(false);
+  const [activeDonutScenario, setActiveDonutScenario] = useState(0);
 
   /**
    * Load current mortgage rates from FRED API
@@ -236,6 +269,13 @@ export default function ScenarioComparison() {
       totalCost: summary.totalCostOfLoan,
       pmi: summary.monthly.pmi,
       equityY5: downPaymentDollars + principalPaidY5,
+      monthlyBreakdown: {
+        principalInterest: summary.monthlyPrincipalInterest,
+        tax: summary.monthly.propertyTax,
+        insurance: summary.monthly.insurance,
+        pmi: summary.monthly.pmi,
+        hoa: summary.monthly.hoa,
+      },
     };
   });
 
@@ -387,16 +427,26 @@ export default function ScenarioComparison() {
           scenarios.length === 2 ? 'grid-cols-2' : 'grid-cols-3',
         )}
       >
-        {scenarios.map((s, i) => (
+        {scenarios.map((s, i) => {
+          const IconComponent = SCENARIO_ICONS[i];
+          return (
           <Card key={s.id} className={cn('border-t-4', SCENARIO_COLORS[i])}>
             <CardContent className="space-y-4 pt-4">
-              {/* Scenario name + remove */}
-              <div className="flex items-center gap-2">
-                <Input
-                  value={s.name}
-                  onChange={(e) => updateScenario(s.id, { name: e.target.value })}
-                  className="font-semibold"
-                />
+              {/* Hero icon */}
+              <div className="flex items-center gap-3">
+                <div className={cn('rounded-lg p-2', SCENARIO_BG[i])}>
+                  <IconComponent className={cn('h-6 w-6', SCENARIO_TEXT[i])} />
+                </div>
+                <div className="flex-1">
+                  <Input
+                    value={s.name}
+                    onChange={(e) => updateScenario(s.id, { name: e.target.value })}
+                    className="font-semibold"
+                  />
+                  <p className={cn('text-xs font-medium mt-1', SCENARIO_TEXT[i])}>
+                    {SCENARIO_TAGLINES[i]}
+                  </p>
+                </div>
                 {scenarios.length > 2 && (
                   <button
                     type="button"
@@ -487,14 +537,154 @@ export default function ScenarioComparison() {
               </div>
             </CardContent>
           </Card>
-        ))}
+        );
+        })}
       </div>
+
+      {/* Visualization charts */}
+      {scenarios.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Comparison Charts</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Bar charts: Monthly payment and Total cost */}
+            <div className="grid grid-cols-2 gap-6">
+              {/* Monthly Payment Bar Chart */}
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-3">Monthly Payment</p>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={scenarios.map((s, i) => ({ name: s.name, value: results[i]?.monthlyTotal ?? 0 }))}>
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip
+                      formatter={(value) => formatCurrency(Number(value))}
+                      contentStyle={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}
+                    />
+                    <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                      {scenarios.map((_, i) => (
+                        <Cell key={`cell-${i}`} fill={CHART_COLORS[i]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Total Cost of Loan Bar Chart */}
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-3">Total Cost of Loan</p>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={scenarios.map((s, i) => ({ name: s.name, value: results[i]?.totalCost ?? 0 }))}>
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip
+                      formatter={(value) => formatCurrency(Number(value))}
+                      contentStyle={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}
+                    />
+                    <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                      {scenarios.map((_, i) => (
+                        <Cell key={`cell-${i}`} fill={CHART_COLORS[i]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Stacked Bar: Monthly Payment Composition */}
+            <div>
+              <p className="text-sm font-medium text-slate-700 mb-3">Monthly Payment Breakdown</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={scenarios.map((s, i) => ({
+                  name: s.name,
+                  'P&I': results[i]?.monthlyBreakdown?.principalInterest ?? 0,
+                  'Tax': results[i]?.monthlyBreakdown?.tax ?? 0,
+                  'Insurance': results[i]?.monthlyBreakdown?.insurance ?? 0,
+                  'PMI': results[i]?.monthlyBreakdown?.pmi ?? 0,
+                  'HOA': results[i]?.monthlyBreakdown?.hoa ?? 0,
+                }))}>
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(value) => formatCurrency(Number(value))}
+                    contentStyle={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}
+                  />
+                  <Legend />
+                  <Bar dataKey="P&I" stackId="a" fill="#3b82f6" />
+                  <Bar dataKey="Tax" stackId="a" fill="#f59e0b" />
+                  <Bar dataKey="Insurance" stackId="a" fill="#10b981" />
+                  <Bar dataKey="PMI" stackId="a" fill="#ef4444" />
+                  <Bar dataKey="HOA" stackId="a" fill="#8b5cf6" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Add scenario */}
       {scenarios.length < 3 && (
         <Button variant="outline" className="w-full" onClick={addScenario}>
           <Plus className="mr-2 h-4 w-4" /> Add scenario
         </Button>
+      )}
+
+      {/* Donut Chart: Interest vs Principal */}
+      {scenarios.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Where Your Money Goes</CardTitle>
+            {scenarios.length > 1 && (
+              <div className="flex gap-2">
+                {scenarios.map((s, i) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveDonutScenario(i)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                      activeDonutScenario === i
+                        ? cn('text-white', {
+                            'bg-blue-500': i === 0,
+                            'bg-violet-500': i === 1,
+                            'bg-emerald-500': i === 2,
+                          })
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80',
+                    )}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: 'Principal', value: results[activeDonutScenario]?.loanAmount ?? 0 },
+                    { name: 'Interest', value: results[activeDonutScenario]?.totalInterest ?? 0 },
+                  ]}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={2}
+                  dataKey="value"
+                  label
+                >
+                  <Cell fill="#3b82f6" />
+                  <Cell fill="#ef4444" />
+                </Pie>
+                <Tooltip
+                  formatter={(value) => formatCurrency(Number(value))}
+                  contentStyle={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}
+                />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
       )}
 
       {/* Comparison table */}

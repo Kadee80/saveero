@@ -31,6 +31,18 @@ import {
   PiggyBank,
   Compass,
 } from 'lucide-react'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -50,6 +62,43 @@ import {
   type RunAllResponse,
   type ComparisonRowOut,
 } from '@/api/scenarioApi'
+
+// ---------------------------------------------------------------------------
+// Scenario colors and metadata
+// ---------------------------------------------------------------------------
+
+const SCENARIO_CONFIG = {
+  stay: {
+    label: 'Stay',
+    color: '#3b82f6', // blue
+    icon: Home,
+    tagline: 'No move, no closing costs',
+  },
+  refinance: {
+    label: 'Refinance',
+    color: '#8b5cf6', // violet
+    icon: Banknote,
+    tagline: 'Same house, lower rate',
+  },
+  sell_buy: {
+    label: 'Sell & Buy',
+    color: '#10b981', // emerald
+    icon: Building2,
+    tagline: 'New house, fresh mortgage',
+  },
+  rent: {
+    label: 'Rent (current home)',
+    color: '#f59e0b', // amber
+    icon: PiggyBank,
+    tagline: 'Income property, stay flexible',
+  },
+  rent_out_buy: {
+    label: 'Rent Out & Buy',
+    color: '#f43f5e', // rose
+    icon: KeyRound,
+    tagline: 'Two homes, two mortgages — biggest upside, biggest risk',
+  },
+} as const
 
 // ---------------------------------------------------------------------------
 // Form state — the only thing we do to MasterInputs in the UI is represent
@@ -391,6 +440,228 @@ function KV({ k, v, bold }: { k: string; v: string; bold?: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
+// Chart components
+// ---------------------------------------------------------------------------
+
+function TotalNetPositionChart({ result }: { result: RunAllResponse }) {
+  if (!result) return null
+
+  const dm = result.decision_map
+  const data = [
+    { name: 'Stay', value: dm.total_net_position.stay },
+    { name: 'Refinance', value: dm.total_net_position.refinance },
+    { name: 'Sell & Buy', value: dm.total_net_position.sell_buy },
+    { name: 'Rent', value: dm.total_net_position.rent },
+    { name: 'Rent Out & Buy', value: dm.total_net_position.rent_out_buy },
+  ]
+
+  const colors = [
+    SCENARIO_CONFIG.stay.color,
+    SCENARIO_CONFIG.refinance.color,
+    SCENARIO_CONFIG.sell_buy.color,
+    SCENARIO_CONFIG.rent.color,
+    SCENARIO_CONFIG.rent_out_buy.color,
+  ]
+
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle className="text-base">Total net position by scenario</CardTitle>
+        <CardDescription className="text-slate-600">
+          Wealth at end of hold period (equity + cash flow).
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={data}>
+            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12 }} />
+            <Tooltip
+              formatter={(value) => formatCurrency(value as number)}
+              contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}
+            />
+            <Bar dataKey="value" fill="#3b82f6">
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={colors[index]} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  )
+}
+
+function MonthlyCostCompositionChart({ result }: { result: RunAllResponse }) {
+  if (!result) return null
+
+  const data = [
+    {
+      name: 'Stay',
+      property_tax: result.stay.monthly_property_tax,
+      insurance: result.stay.monthly_insurance,
+      hoa: result.stay.monthly_hoa,
+      maintenance: result.stay.monthly_maintenance,
+      pi: result.stay.current_monthly_pi,
+    },
+    {
+      name: 'Refinance',
+      property_tax: result.refinance.monthly_property_tax,
+      insurance: result.refinance.monthly_insurance,
+      hoa: result.refinance.monthly_hoa,
+      maintenance: result.refinance.monthly_maintenance,
+      pi: result.refinance.new_monthly_pi,
+    },
+    {
+      name: 'Sell & Buy',
+      property_tax: result.sell_buy.new_home_monthly_property_tax,
+      insurance: result.sell_buy.new_home_monthly_insurance,
+      hoa: result.sell_buy.new_home_monthly_hoa,
+      maintenance: result.sell_buy.new_home_monthly_maintenance,
+      pi: result.sell_buy.new_monthly_pi,
+    },
+    {
+      name: 'Rent',
+      property_tax: result.rent.monthly_flow.monthly_property_tax,
+      insurance: result.rent.monthly_flow.monthly_insurance,
+      hoa: result.rent.monthly_flow.monthly_hoa,
+      maintenance: result.rent.monthly_flow.maintenance_reserve,
+      pi: result.rent.monthly_flow.current_monthly_pi,
+    },
+    {
+      name: 'Rent Out & Buy',
+      property_tax:
+        result.rent_out_buy.monthly_flow.monthly_property_tax +
+        result.rent_out_buy.new_home_monthly_property_tax,
+      insurance:
+        result.rent_out_buy.monthly_flow.monthly_insurance +
+        result.rent_out_buy.new_home_monthly_insurance,
+      hoa:
+        result.rent_out_buy.monthly_flow.monthly_hoa +
+        result.rent_out_buy.new_home_monthly_hoa,
+      maintenance:
+        result.rent_out_buy.monthly_flow.maintenance_reserve +
+        result.rent_out_buy.new_home_monthly_maintenance,
+      pi:
+        result.rent_out_buy.monthly_flow.current_monthly_pi +
+        result.rent_out_buy.new_monthly_pi,
+    },
+  ]
+
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle className="text-base">Monthly cost composition</CardTitle>
+        <CardDescription className="text-slate-600">
+          Property tax, insurance, HOA, maintenance, and principal & interest.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={data}>
+            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12 }} />
+            <Tooltip
+              formatter={(value) => formatCurrency(value as number)}
+              contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}
+            />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Bar dataKey="pi" stackId="a" fill="#3b82f6" name="P&I" />
+            <Bar dataKey="property_tax" stackId="a" fill="#8b5cf6" name="Property tax" />
+            <Bar dataKey="insurance" stackId="a" fill="#10b981" name="Insurance" />
+            <Bar dataKey="hoa" stackId="a" fill="#f59e0b" name="HOA" />
+            <Bar dataKey="maintenance" stackId="a" fill="#f43f5e" name="Maintenance" />
+          </BarChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  )
+}
+
+function RentEquityCompositionChart({ result }: { result: RunAllResponse }) {
+  if (!result) return null
+
+  const breakdown = result.decision_map.rent_driver_breakdown
+  const data: Array<{ name: string; value: number }> = []
+
+  if (breakdown.current_net_equity_today > 0) {
+    data.push({ name: 'Starting equity', value: breakdown.current_net_equity_today })
+  }
+  if (breakdown.net_appreciation_after_selling_costs > 0) {
+    data.push({
+      name: 'Appreciation (net)',
+      value: breakdown.net_appreciation_after_selling_costs,
+    })
+  }
+  if (breakdown.principal_paydown_over_hold_period > 0) {
+    data.push({
+      name: 'Principal paydown',
+      value: breakdown.principal_paydown_over_hold_period,
+    })
+  }
+  if (breakdown.cumulative_after_tax_rental_cash_flow > 0) {
+    data.push({
+      name: 'Rental cash flow (after tax)',
+      value: breakdown.cumulative_after_tax_rental_cash_flow,
+    })
+  }
+  if (breakdown.initial_make_ready_cost < 0) {
+    data.push({
+      name: 'Make-ready cost',
+      value: Math.abs(breakdown.initial_make_ready_cost),
+    })
+  }
+
+  if (data.length === 0) return null
+
+  const colors = [
+    '#3b82f6',
+    '#8b5cf6',
+    '#10b981',
+    '#f59e0b',
+    '#f43f5e',
+    '#ec4899',
+    '#6366f1',
+  ]
+
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle className="text-base">Where Rent's wealth comes from</CardTitle>
+        <CardDescription className="text-slate-600">
+          Breakdown of Rent scenario's net position.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={220}>
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius={60}
+              outerRadius={90}
+              paddingAngle={2}
+              dataKey="value"
+              label={false}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value) => formatCurrency(value as number)}
+              contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}
+            />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+          </PieChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
@@ -473,7 +744,7 @@ export default function DecisionMap() {
                     {g.title}
                   </CardTitle>
                   {g.description && (
-                    <CardDescription className="text-xs">
+                    <CardDescription className="text-xs text-slate-600">
                       {g.description}
                     </CardDescription>
                   )}
@@ -536,88 +807,94 @@ function DecisionSummary({ result }: { result: RunAllResponse }) {
   const pr = decision_map.priority_rankings
 
   return (
-    <Card className="border-blue-300 bg-blue-50">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base text-slate-900">
-          <Compass className="h-4 w-4" />
-          Recommendation over {decision_map.selected_hold_period_years} years
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm leading-relaxed">{rec.plain_english_insight}</p>
+    <>
+      <Card className="border-blue-300 bg-blue-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base text-slate-900">
+            <Compass className="h-4 w-4" />
+            Recommendation over {decision_map.selected_hold_period_years} years
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm leading-relaxed">{rec.plain_english_insight}</p>
 
-        <div className="grid grid-cols-2 gap-4 border-t pt-4 md:grid-cols-4">
-          <Stat
-            label="Best wealth outcome"
-            value={rec.best_financial_outcome}
-            tone="good"
-          />
-          <Stat
-            label="Total net position"
-            value={formatCurrency(rec.best_total_net_position)}
-            tone="good"
-          />
-          <Stat
-            label="Best monthly affordability"
-            value={rec.best_for_monthly_affordability}
-          />
-          <Stat label="Simplest path" value={rec.simplest_path} />
-        </div>
+          <div className="grid grid-cols-2 gap-4 border-t pt-4 md:grid-cols-4">
+            <Stat
+              label="Best wealth outcome"
+              value={rec.best_financial_outcome}
+              tone="good"
+            />
+            <Stat
+              label="Total net position"
+              value={formatCurrency(rec.best_total_net_position)}
+              tone="good"
+            />
+            <Stat
+              label="Best monthly affordability"
+              value={rec.best_for_monthly_affordability}
+            />
+            <Stat label="Simplest path" value={rec.simplest_path} />
+          </div>
 
-        <div className="border-t pt-4">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Priority rankings
+          <div className="border-t pt-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              Priority rankings
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+              <KV k="Max wealth" v={pr.max_wealth} />
+              <KV k="Affordability" v={pr.monthly_affordability} />
+              <KV k="Simplicity" v={pr.simplicity} />
+              <KV k="Move / lifestyle" v={pr.move_lifestyle_change} />
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-            <KV k="Max wealth" v={pr.max_wealth} />
-            <KV k="Affordability" v={pr.monthly_affordability} />
-            <KV k="Simplicity" v={pr.simplicity} />
-            <KV k="Move / lifestyle" v={pr.move_lifestyle_change} />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+      <RentEquityCompositionChart result={result} />
+    </>
   )
 }
 
 function ScenarioComparisonTables({ result }: { result: RunAllResponse }) {
   const dm = result.decision_map
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Side-by-side comparison</CardTitle>
-        <CardDescription>
-          All five scenarios, four metrics. Green is cash in your pocket, red
-          is cash out.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ComparisonTable
-          rows={[
-            {
-              label: 'Monthly all-in change vs today',
-              row: dm.monthly_all_in_impact_vs_today,
-              hint: 'Before tax — new out-of-pocket each month.',
-            },
-            {
-              label: 'After-tax monthly change vs today',
-              row: dm.after_tax_monthly_impact_vs_today,
-              hint: 'After deductions / rental tax benefit.',
-            },
-            {
-              label: 'Net equity at horizon (if sold)',
-              row: dm.net_equity_if_sold_at_horizon,
-              hint: 'Home(s) sold at hold-period end, net of selling costs.',
-            },
-            {
-              label: 'Total net position',
-              row: dm.total_net_position,
-              hint: 'Equity + cumulative rental cash flow − make-ready costs.',
-            },
-          ]}
-        />
-      </CardContent>
-    </Card>
+    <>
+      <TotalNetPositionChart result={result} />
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Side-by-side comparison</CardTitle>
+          <CardDescription className="text-slate-600">
+            All five scenarios, four metrics. Green is cash in your pocket, red
+            is cash out.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ComparisonTable
+            rows={[
+              {
+                label: 'Monthly all-in change vs today',
+                row: dm.monthly_all_in_impact_vs_today,
+                hint: 'Before tax — new out-of-pocket each month.',
+              },
+              {
+                label: 'After-tax monthly change vs today',
+                row: dm.after_tax_monthly_impact_vs_today,
+                hint: 'After deductions / rental tax benefit.',
+              },
+              {
+                label: 'Net equity at horizon (if sold)',
+                row: dm.net_equity_if_sold_at_horizon,
+                hint: 'Home(s) sold at hold-period end, net of selling costs.',
+              },
+              {
+                label: 'Total net position',
+                row: dm.total_net_position,
+                hint: 'Equity + cumulative rental cash flow − make-ready costs.',
+              },
+            ]}
+          />
+        </CardContent>
+      </Card>
+    </>
   )
 }
 
@@ -691,29 +968,40 @@ function FeasibilityStrip({ result }: { result: RunAllResponse }) {
 
 function ScenarioDetails({ result }: { result: RunAllResponse }) {
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <StayCard result={result} />
-      <RefinanceCard result={result} />
-      <SellBuyCard result={result} />
-      <RentCard result={result} />
-      <RentOutBuyCard result={result} />
-    </div>
+    <>
+      <MonthlyCostCompositionChart result={result} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <StayCard result={result} />
+        <RefinanceCard result={result} />
+        <SellBuyCard result={result} />
+        <RentCard result={result} />
+        <RentOutBuyCard result={result} />
+      </div>
+    </>
   )
 }
 
 function StayCard({ result }: { result: RunAllResponse }) {
   const s = result.stay
+  const config = SCENARIO_CONFIG.stay
+  const Icon = config.icon
   return (
-    <Card>
+    <Card className="border-t-4" style={{ borderTopColor: config.color }}>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-2">
-            <Home className="h-4 w-4" />
-            Stay
-          </span>
-          <Badge variant="secondary">
-            {formatCurrency(s.total_net_position)}
-          </Badge>
+        <CardTitle className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className="rounded-full p-2.5 text-white"
+                style={{ backgroundColor: config.color }}
+              >
+                <Icon className="h-5 w-5" />
+              </div>
+              <span>Stay</span>
+            </div>
+            <Badge variant="secondary">{formatCurrency(s.total_net_position)}</Badge>
+          </div>
+          <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-1.5">
@@ -735,17 +1023,25 @@ function StayCard({ result }: { result: RunAllResponse }) {
 function RefinanceCard({ result }: { result: RunAllResponse }) {
   const r = result.refinance
   const saves = r.monthly_payment_change < 0
+  const config = SCENARIO_CONFIG.refinance
+  const Icon = config.icon
   return (
-    <Card>
+    <Card className="border-t-4" style={{ borderTopColor: config.color }}>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-2">
-            <Banknote className="h-4 w-4" />
-            Refinance
-          </span>
-          <Badge variant="secondary">
-            {formatCurrency(r.total_net_position)}
-          </Badge>
+        <CardTitle className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className="rounded-full p-2.5 text-white"
+                style={{ backgroundColor: config.color }}
+              >
+                <Icon className="h-5 w-5" />
+              </div>
+              <span>Refinance</span>
+            </div>
+            <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
+          </div>
+          <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-1.5">
@@ -781,17 +1077,25 @@ function RefinanceCard({ result }: { result: RunAllResponse }) {
 
 function SellBuyCard({ result }: { result: RunAllResponse }) {
   const s = result.sell_buy
+  const config = SCENARIO_CONFIG.sell_buy
+  const Icon = config.icon
   return (
-    <Card>
+    <Card className="border-t-4" style={{ borderTopColor: config.color }}>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
-            Sell &amp; Buy
-          </span>
-          <Badge variant="secondary">
-            {formatCurrency(s.total_net_position)}
-          </Badge>
+        <CardTitle className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className="rounded-full p-2.5 text-white"
+                style={{ backgroundColor: config.color }}
+              >
+                <Icon className="h-5 w-5" />
+              </div>
+              <span>Sell &amp; Buy</span>
+            </div>
+            <Badge variant="secondary">{formatCurrency(s.total_net_position)}</Badge>
+          </div>
+          <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-1.5">
@@ -823,19 +1127,27 @@ function RentCard({ result }: { result: RunAllResponse }) {
   const r = result.rent
   const mf = r.monthly_flow
   const tv = r.tax_view
+  const config = SCENARIO_CONFIG.rent
+  const Icon = config.icon
   return (
-    <Card>
+    <Card className="border-t-4" style={{ borderTopColor: config.color }}>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-2">
-            <PiggyBank className="h-4 w-4" />
-            Rent (current home)
-          </span>
-          <Badge variant="secondary">
-            {formatCurrency(r.total_net_position)}
-          </Badge>
+        <CardTitle className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className="rounded-full p-2.5 text-white"
+                style={{ backgroundColor: config.color }}
+              >
+                <Icon className="h-5 w-5" />
+              </div>
+              <span>Rent (current home)</span>
+            </div>
+            <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
+          </div>
+          <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
         </CardTitle>
-        <CardDescription className="text-xs">
+        <CardDescription className="text-xs text-slate-600">
           Keep the house, rent it out. Investment view — doesn't include your
           next housing cost.
         </CardDescription>
@@ -873,31 +1185,39 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
       : r.liquidity_status === 'Stretch'
         ? 'warn'
         : 'bad'
+  const config = SCENARIO_CONFIG.rent_out_buy
+  const Icon = config.icon
   return (
-    <Card className="lg:col-span-2">
+    <Card className="border-t-4 lg:col-span-2" style={{ borderTopColor: config.color }}>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4" />
-            Rent Out &amp; Buy
-          </span>
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className={cn(
-                statusTone === 'good' && 'border-emerald-400 text-emerald-700',
-                statusTone === 'warn' && 'border-amber-400 text-amber-700',
-                statusTone === 'bad' && 'border-red-400 text-red-700',
-              )}
-            >
-              {r.liquidity_status}
-            </Badge>
-            <Badge variant="secondary">
-              {formatCurrency(r.total_net_position)}
-            </Badge>
+        <CardTitle className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className="rounded-full p-2.5 text-white"
+                style={{ backgroundColor: config.color }}
+              >
+                <Icon className="h-5 w-5" />
+              </div>
+              <span>Rent Out &amp; Buy</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className={cn(
+                  statusTone === 'good' && 'border-emerald-400 text-emerald-700',
+                  statusTone === 'warn' && 'border-amber-400 text-amber-700',
+                  statusTone === 'bad' && 'border-red-400 text-red-700',
+                )}
+              >
+                {r.liquidity_status}
+              </Badge>
+              <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
+            </div>
           </div>
+          <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
         </CardTitle>
-        <CardDescription className="text-xs">{r.execution_note}</CardDescription>
+        <CardDescription className="text-xs text-slate-600">{r.execution_note}</CardDescription>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-1.5">
@@ -970,7 +1290,7 @@ function AuditStrip({ result }: { result: RunAllResponse }) {
           )}
           Audit — {audit.all_passed ? 'all checks passed' : 'items to review'}
         </CardTitle>
-        <CardDescription className="text-xs">
+        <CardDescription className="text-xs text-slate-600">
           Sanity checks against Excel source-of-truth.
         </CardDescription>
       </CardHeader>
