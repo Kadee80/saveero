@@ -30,6 +30,7 @@
  */
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Trophy, RefreshCw, AlertCircle, Shield, Zap, Target } from 'lucide-react';
+import { ContactPipelineButton } from '@/components/ContactPipelineButton';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -534,6 +535,11 @@ export default function ScenarioComparison() {
                     <Trophy className="h-3 w-3" /> Lowest payment
                   </Badge>
                 )}
+              </div>
+
+              {/* Lead-gen CTA */}
+              <div className="border-t pt-3">
+                <ContactPipelineButton pipeline="mortgage-broker" className="w-full" />
               </div>
             </CardContent>
           </Card>

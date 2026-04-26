@@ -45,6 +45,7 @@ import {
 } from 'recharts'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { ContactPipelineButton, type Pipeline } from '@/components/ContactPipelineButton'
 import {
   Card,
   CardContent,
@@ -801,10 +802,23 @@ export default function DecisionMap() {
 // Result sub-views
 // ---------------------------------------------------------------------------
 
+/** Map recommended scenario name → which pipelines to surface in the rec card */
+function pipelinesForScenario(scenarioName: string): Pipeline[] {
+  switch (scenarioName) {
+    case 'Stay':         return ['financial-planner']
+    case 'Refinance':    return ['mortgage-broker']
+    case 'Sell + Buy':   return ['real-estate-agent', 'mortgage-broker']
+    case 'Rent':         return ['real-estate-agent', 'financial-planner']
+    case 'Rent Out & Buy': return ['real-estate-agent', 'mortgage-broker']
+    default:             return []
+  }
+}
+
 function DecisionSummary({ result }: { result: RunAllResponse }) {
   const { decision_map } = result
   const rec = decision_map.recommendation
   const pr = decision_map.priority_rankings
+  const recommendedPipelines = pipelinesForScenario(rec.best_financial_outcome)
 
   return (
     <>
@@ -847,6 +861,19 @@ function DecisionSummary({ result }: { result: RunAllResponse }) {
               <KV k="Move / lifestyle" v={pr.move_lifestyle_change} />
             </div>
           </div>
+
+          {recommendedPipelines.length > 0 && (
+            <div className="border-t pt-4">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Ready to act on {rec.best_financial_outcome}?
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {recommendedPipelines.map((p) => (
+                  <ContactPipelineButton key={p} pipeline={p} size="default" />
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
       <RentEquityCompositionChart result={result} />
@@ -1015,6 +1042,9 @@ function StayCard({ result }: { result: RunAllResponse }) {
         <KV k="Future mortgage balance" v={formatCurrency(s.future_mortgage_balance)} />
         <KV k="Gross equity" v={formatCurrency(s.gross_equity)} />
         <KV k="Net equity at horizon" v={formatCurrency(s.net_equity_at_horizon)} bold />
+        <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
+          <ContactPipelineButton pipeline="financial-planner" />
+        </div>
       </CardContent>
     </Card>
   )
@@ -1070,6 +1100,9 @@ function RefinanceCard({ result }: { result: RunAllResponse }) {
           v={formatCurrency(r.net_equity_at_horizon)}
           bold
         />
+        <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
+          <ContactPipelineButton pipeline="mortgage-broker" />
+        </div>
       </CardContent>
     </Card>
   )
@@ -1118,6 +1151,10 @@ function SellBuyCard({ result }: { result: RunAllResponse }) {
           v={formatCurrency(s.net_equity_at_horizon)}
           bold
         />
+        <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
+          <ContactPipelineButton pipeline="real-estate-agent" />
+          <ContactPipelineButton pipeline="mortgage-broker" />
+        </div>
       </CardContent>
     </Card>
   )
@@ -1172,6 +1209,10 @@ function RentCard({ result }: { result: RunAllResponse }) {
           v={formatCurrency(r.net_equity_at_horizon)}
           bold
         />
+        <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
+          <ContactPipelineButton pipeline="real-estate-agent" />
+          <ContactPipelineButton pipeline="financial-planner" />
+        </div>
       </CardContent>
     </Card>
   )
@@ -1271,6 +1312,10 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
             v={formatCurrency(r.total_net_position)}
             bold
           />
+        </div>
+        <div className="flex flex-wrap gap-2 border-t pt-3 md:col-span-2">
+          <ContactPipelineButton pipeline="real-estate-agent" />
+          <ContactPipelineButton pipeline="mortgage-broker" />
         </div>
       </CardContent>
     </Card>
