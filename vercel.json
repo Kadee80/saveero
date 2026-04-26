@@ -11,6 +11,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://saveero-7nu9.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
