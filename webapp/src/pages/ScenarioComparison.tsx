@@ -548,8 +548,8 @@ export default function ScenarioComparison() {
             <CardTitle className="text-base">Comparison Charts</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Bar charts: Monthly payment and Total cost */}
-            <div className="grid grid-cols-2 gap-6">
+            {/* Top row: two bar charts + donut, three columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Monthly Payment Bar Chart */}
               <div>
                 <p className="text-sm font-medium text-slate-700 mb-3">Monthly Payment</p>
@@ -587,6 +587,60 @@ export default function ScenarioComparison() {
                       ))}
                     </Bar>
                   </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Donut: Principal vs Interest */}
+              <div>
+                <div className="flex items-center justify-between mb-3 gap-2">
+                  <p className="text-sm font-medium text-slate-700">Where Your Money Goes</p>
+                  {scenarios.length > 1 && (
+                    <div className="flex gap-1">
+                      {scenarios.map((s, i) => (
+                        <button
+                          key={s.id}
+                          onClick={() => setActiveDonutScenario(i)}
+                          className={cn(
+                            'px-2 py-1 rounded text-xs font-medium transition-colors',
+                            activeDonutScenario === i
+                              ? cn('text-white', {
+                                  'bg-blue-500': i === 0,
+                                  'bg-violet-500': i === 1,
+                                  'bg-emerald-500': i === 2,
+                                })
+                              : 'bg-muted text-slate-600 hover:bg-muted/80',
+                          )}
+                          title={s.name}
+                        >
+                          {i + 1}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: 'Principal', value: results[activeDonutScenario]?.loanAmount ?? 0 },
+                        { name: 'Interest', value: results[activeDonutScenario]?.totalInterest ?? 0 },
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      <Cell fill="#3b82f6" />
+                      <Cell fill="#ef4444" />
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => formatCurrency(Number(value))}
+                      contentStyle={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -627,64 +681,6 @@ export default function ScenarioComparison() {
         <Button variant="outline" className="w-full" onClick={addScenario}>
           <Plus className="mr-2 h-4 w-4" /> Add scenario
         </Button>
-      )}
-
-      {/* Donut Chart: Interest vs Principal */}
-      {scenarios.length > 0 && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Where Your Money Goes</CardTitle>
-            {scenarios.length > 1 && (
-              <div className="flex gap-2">
-                {scenarios.map((s, i) => (
-                  <button
-                    key={s.id}
-                    onClick={() => setActiveDonutScenario(i)}
-                    className={cn(
-                      'px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                      activeDonutScenario === i
-                        ? cn('text-white', {
-                            'bg-blue-500': i === 0,
-                            'bg-violet-500': i === 1,
-                            'bg-emerald-500': i === 2,
-                          })
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80',
-                    )}
-                  >
-                    {s.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={[
-                    { name: 'Principal', value: results[activeDonutScenario]?.loanAmount ?? 0 },
-                    { name: 'Interest', value: results[activeDonutScenario]?.totalInterest ?? 0 },
-                  ]}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  dataKey="value"
-                  label
-                >
-                  <Cell fill="#3b82f6" />
-                  <Cell fill="#ef4444" />
-                </Pie>
-                <Tooltip
-                  formatter={(value) => formatCurrency(Number(value))}
-                  contentStyle={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}
-                />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
       )}
 
       {/* Comparison table */}
