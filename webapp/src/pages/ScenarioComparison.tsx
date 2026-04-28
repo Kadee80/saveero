@@ -31,6 +31,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Trophy, RefreshCw, AlertCircle, Shield, Zap, Target } from 'lucide-react';
 import { ContactPipelineButton } from '@/components/ContactPipelineButton';
+import { ScenarioWatermark, type WatermarkScene } from '@/components/ScenarioWatermark';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -110,6 +111,7 @@ const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#10b981'];
  */
 const SCENARIO_ICONS = [Shield, Zap, Target];
 const SCENARIO_TAGLINES = ['Conservative play', 'Aggressive play', 'Tight discipline'];
+const SCENARIO_WATERMARKS: WatermarkScene[] = ['shield', 'zap', 'target'];
 
 /**
  * Generate a short random ID for new scenarios
@@ -431,7 +433,8 @@ export default function ScenarioComparison() {
         {scenarios.map((s, i) => {
           const IconComponent = SCENARIO_ICONS[i];
           return (
-          <Card key={s.id} className={cn('border-t-4', SCENARIO_COLORS[i])}>
+          <Card key={s.id} className={cn('relative isolate overflow-hidden border-t-4', SCENARIO_COLORS[i])}>
+            <ScenarioWatermark scene={SCENARIO_WATERMARKS[i]} color={CHART_COLORS[i]} />
             <CardContent className="space-y-4 pt-4">
               {/* Hero icon */}
               <div className="flex items-center gap-3">

@@ -46,6 +46,7 @@ import {
 import { cn, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ContactPipelineButton, type Pipeline } from '@/components/ContactPipelineButton'
+import { ScenarioWatermark } from '@/components/ScenarioWatermark'
 import {
   Card,
   CardContent,
@@ -1013,7 +1014,8 @@ function StayCard({ result }: { result: RunAllResponse }) {
   const config = SCENARIO_CONFIG.stay
   const Icon = config.icon
   return (
-    <Card className="border-t-4" style={{ borderTopColor: config.color }}>
+    <Card className="relative isolate overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
+      <ScenarioWatermark scene="stay" color={config.color} />
       <CardHeader>
         <CardTitle className="space-y-2 text-sm">
           <div className="flex items-center justify-between">
@@ -1056,7 +1058,8 @@ function RefinanceCard({ result }: { result: RunAllResponse }) {
   const config = SCENARIO_CONFIG.refinance
   const Icon = config.icon
   return (
-    <Card className="border-t-4" style={{ borderTopColor: config.color }}>
+    <Card className="relative isolate overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
+      <ScenarioWatermark scene="refinance" color={config.color} />
       <CardHeader>
         <CardTitle className="space-y-2 text-sm">
           <div className="flex items-center justify-between">
@@ -1113,7 +1116,8 @@ function SellBuyCard({ result }: { result: RunAllResponse }) {
   const config = SCENARIO_CONFIG.sell_buy
   const Icon = config.icon
   return (
-    <Card className="border-t-4" style={{ borderTopColor: config.color }}>
+    <Card className="relative isolate overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
+      <ScenarioWatermark scene="sell_buy" color={config.color} />
       <CardHeader>
         <CardTitle className="space-y-2 text-sm">
           <div className="flex items-center justify-between">
@@ -1167,7 +1171,8 @@ function RentCard({ result }: { result: RunAllResponse }) {
   const config = SCENARIO_CONFIG.rent
   const Icon = config.icon
   return (
-    <Card className="border-t-4" style={{ borderTopColor: config.color }}>
+    <Card className="relative isolate overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
+      <ScenarioWatermark scene="rent" color={config.color} />
       <CardHeader>
         <CardTitle className="space-y-2 text-sm">
           <div className="flex items-center justify-between">
@@ -1229,7 +1234,8 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
   const config = SCENARIO_CONFIG.rent_out_buy
   const Icon = config.icon
   return (
-    <Card className="border-t-4 lg:col-span-2" style={{ borderTopColor: config.color }}>
+    <Card className="relative isolate overflow-hidden border-t-4 lg:col-span-2" style={{ borderTopColor: config.color }}>
+      <ScenarioWatermark scene="rent_out_buy" color={config.color} size={280} />
       <CardHeader>
         <CardTitle className="space-y-2 text-sm">
           <div className="flex items-center justify-between">
