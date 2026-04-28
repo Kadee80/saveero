@@ -68,7 +68,7 @@ function timeAgo(iso: string): string {
  */
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    draft:     'bg-slate-100 text-slate-600',
+    draft:     'bg-stone-100 text-stone-600',
     published: 'bg-blue-100 text-blue-700',
     active:    'bg-green-100 text-green-700',
   }
@@ -169,8 +169,8 @@ export default function Dashboard() {
 
           {!loading && !error && listings.length === 0 && (
             <div className="flex flex-col items-center gap-4 py-16 text-center">
-              <div className="rounded-full bg-slate-100 p-4">
-                <Home className="h-8 w-8 text-slate-400" />
+              <div className="rounded-full bg-stone-100 p-4">
+                <Home className="h-8 w-8 text-stone-400" />
               </div>
               <div>
                 <p className="font-medium">No listings yet</p>

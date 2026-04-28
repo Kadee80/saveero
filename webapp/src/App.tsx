@@ -38,8 +38,8 @@ export default function App() {
   // Still checking session — show nothing to avoid flash
   if (session === undefined) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <span className="text-slate-400 text-sm">Loading…</span>
+      <div className="min-h-screen flex items-center justify-center bg-stone-950">
+        <span className="text-stone-400 text-sm">Loading…</span>
       </div>
     )
   }
@@ -55,12 +55,12 @@ export default function App() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex flex-col bg-slate-900 text-slate-100 transition-all duration-200',
+          'fixed inset-y-0 left-0 z-40 flex flex-col bg-stone-900 text-stone-100 transition-all duration-200',
           collapsed ? 'w-16' : 'w-52'
         )}
       >
         {/* Logo */}
-        <div className="flex h-14 items-center px-4 border-b border-slate-700">
+        <div className="flex h-14 items-center px-4 border-b border-stone-700">
           {collapsed
             ? <span className="text-lg font-bold mx-auto">S</span>
             : <span className="text-lg font-bold tracking-tight">Saveero</span>
@@ -78,8 +78,8 @@ export default function App() {
                 className={cn(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   active
-                    ? 'bg-slate-700 text-white'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    ? 'bg-stone-700 text-white'
+                    : 'text-stone-400 hover:bg-stone-800 hover:text-white'
                 )}
               >
                 <Icon size={18} className="shrink-0" />
@@ -90,16 +90,16 @@ export default function App() {
         </nav>
 
         {/* User email + logout */}
-        <div className="border-t border-slate-700 px-2 py-3 space-y-1">
+        <div className="border-t border-stone-700 px-2 py-3 space-y-1">
           {!collapsed && (
-            <p className="px-3 text-xs text-slate-500 truncate">
+            <p className="px-3 text-xs text-stone-500 truncate">
               {session.user.email}
             </p>
           )}
           <button
             onClick={() => signOut()}
             className={cn(
-              'flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-colors',
+              'flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium text-stone-400 hover:bg-stone-800 hover:text-white transition-colors',
               collapsed && 'justify-center'
             )}
           >
@@ -111,7 +111,7 @@ export default function App() {
         {/* Collapse toggle */}
         <button
           onClick={() => setCollapsed(c => !c)}
-          className="flex items-center justify-center h-10 border-t border-slate-700 text-slate-400 hover:text-white transition-colors"
+          className="flex items-center justify-center h-10 border-t border-stone-700 text-stone-400 hover:text-white transition-colors"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}

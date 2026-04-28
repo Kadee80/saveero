@@ -310,12 +310,12 @@ function FieldInput({
 
   return (
     <div className="space-y-1">
-      <Label htmlFor={def.key} className="text-xs font-semibold text-slate-700">
+      <Label htmlFor={def.key} className="text-xs font-semibold text-stone-700">
         {def.label}
       </Label>
       <div className="relative">
         {prefix && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 text-sm">
             {prefix}
           </span>
         )}
@@ -328,7 +328,7 @@ function FieldInput({
           onChange={(e) => onChange(Number(e.target.value))}
         />
         {suffix && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-500">
             {suffix}
           </span>
         )}
@@ -366,7 +366,7 @@ function ComparisonTable({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b text-left text-xs font-semibold uppercase tracking-wide text-slate-700">
+          <tr className="border-b text-left text-xs font-semibold uppercase tracking-wide text-stone-700">
             <th className="py-2 pr-3 font-medium">Metric</th>
             {slugs.map((s) => (
               <th key={s} className="py-2 pr-3 text-right font-medium">
@@ -379,8 +379,8 @@ function ComparisonTable({
           {rows.map(({ label, row, hint }) => (
             <tr key={label} className="border-b last:border-0">
               <td className="py-2 pr-3">
-                <div className="font-medium text-slate-900">{label}</div>
-                {hint && <div className="text-xs text-slate-500">{hint}</div>}
+                <div className="font-medium text-stone-900">{label}</div>
+                {hint && <div className="text-xs text-stone-500">{hint}</div>}
               </td>
               {slugs.map((s) => {
                 const v = row[s]
@@ -419,10 +419,10 @@ function Stat({
     tone === 'good' ? 'text-emerald-700'
     : tone === 'bad' ? 'text-red-700'
     : tone === 'warn' ? 'text-amber-700'
-    : 'text-slate-900'
+    : 'text-stone-900'
   return (
     <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+      <div className="text-xs font-semibold uppercase tracking-wide text-stone-600">
         {label}
       </div>
       <div className={cn('mt-0.5 text-base font-semibold tabular-nums', toneCls)}>
@@ -435,8 +435,8 @@ function Stat({
 function KV({ k, v, bold }: { k: string; v: string; bold?: boolean }) {
   return (
     <div className="flex justify-between text-sm">
-      <span className="text-slate-600">{k}</span>
-      <span className={cn('tabular-nums text-slate-900', bold && 'font-semibold')}>{v}</span>
+      <span className="text-stone-600">{k}</span>
+      <span className={cn('tabular-nums text-stone-900', bold && 'font-semibold')}>{v}</span>
     </div>
   )
 }
@@ -469,7 +469,7 @@ function TotalNetPositionChart({ result }: { result: RunAllResponse }) {
     <Card className="mb-6">
       <CardHeader>
         <CardTitle className="text-base">Total net position by scenario</CardTitle>
-        <CardDescription className="text-slate-600">
+        <CardDescription className="text-stone-600">
           Wealth at end of hold period (equity + cash flow).
         </CardDescription>
       </CardHeader>
@@ -554,7 +554,7 @@ function MonthlyCostCompositionChart({ result }: { result: RunAllResponse }) {
     <Card className="mb-6">
       <CardHeader>
         <CardTitle className="text-base">Monthly cost composition</CardTitle>
-        <CardDescription className="text-slate-600">
+        <CardDescription className="text-stone-600">
           Property tax, insurance, HOA, maintenance, and principal & interest.
         </CardDescription>
       </CardHeader>
@@ -630,7 +630,7 @@ function RentEquityCompositionChart({ result }: { result: RunAllResponse }) {
     <Card className="mb-6">
       <CardHeader>
         <CardTitle className="text-base">Where Rent's wealth comes from</CardTitle>
-        <CardDescription className="text-slate-600">
+        <CardDescription className="text-stone-600">
           Breakdown of Rent scenario's net position.
         </CardDescription>
       </CardHeader>
@@ -705,7 +705,7 @@ export default function DecisionMap() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Decision Map</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">
+          <p className="mt-1 max-w-2xl text-sm text-stone-600">
             Five paths, one view. Compare staying, refinancing, selling &amp; buying,
             renting the house out, or renting it out <em>and</em> buying — over the
             hold period you choose. Numbers tie to your workbook cell-for-cell.
@@ -746,7 +746,7 @@ export default function DecisionMap() {
                     {g.title}
                   </CardTitle>
                   {g.description && (
-                    <CardDescription className="text-xs text-slate-600">
+                    <CardDescription className="text-xs text-stone-600">
                       {g.description}
                     </CardDescription>
                   )}
@@ -775,8 +775,8 @@ export default function DecisionMap() {
           {!result && !loading && (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-                <Compass className="h-8 w-8 text-slate-500" />
-                <p className="text-sm text-slate-600">
+                <Compass className="h-8 w-8 text-stone-500" />
+                <p className="text-sm text-stone-600">
                   Adjust the inputs on the left, then click <b>Recalculate</b> to
                   run all five scenarios.
                 </p>
@@ -825,7 +825,7 @@ function DecisionSummary({ result }: { result: RunAllResponse }) {
     <>
       <Card className="border-blue-300 bg-blue-50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base text-slate-900">
+          <CardTitle className="flex items-center gap-2 text-base text-stone-900">
             <Compass className="h-4 w-4" />
             Recommendation over {decision_map.selected_hold_period_years} years
           </CardTitle>
@@ -852,7 +852,7 @@ function DecisionSummary({ result }: { result: RunAllResponse }) {
           </div>
 
           <div className="border-t pt-4">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">
               Priority rankings
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
@@ -865,7 +865,7 @@ function DecisionSummary({ result }: { result: RunAllResponse }) {
 
           {recommendedPipelines.length > 0 && (
             <div className="border-t pt-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">
                 Ready to act on {rec.best_financial_outcome}?
               </div>
               <div className="flex flex-wrap gap-2">
@@ -890,7 +890,7 @@ function ScenarioComparisonTables({ result }: { result: RunAllResponse }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Side-by-side comparison</CardTitle>
-          <CardDescription className="text-slate-600">
+          <CardDescription className="text-stone-600">
             All five scenarios, four metrics. Green is cash in your pocket, red
             is cash out.
           </CardDescription>
@@ -952,7 +952,7 @@ function FeasibilityStrip({ result }: { result: RunAllResponse }) {
           tone={f.requires_monthly_subsidy === 'No' ? 'good' : 'warn'}
         />
         <div className="col-span-2 md:col-span-4 border-t pt-3">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600">
             Rent Out &amp; Buy liquidity
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -964,15 +964,15 @@ function FeasibilityStrip({ result }: { result: RunAllResponse }) {
             >
               {f.rent_out_buy_liquidity_status}
             </span>
-            <span className="text-slate-700">
+            <span className="text-stone-700">
               Upfront cash required:{' '}
-              <b className="tabular-nums text-slate-900">
+              <b className="tabular-nums text-stone-900">
                 {formatCurrency(f.rent_out_buy_upfront_cash_required)}
               </b>
             </span>
-            <span className="text-slate-700">
+            <span className="text-stone-700">
               Available:{' '}
-              <b className="tabular-nums text-slate-900">
+              <b className="tabular-nums text-stone-900">
                 {formatCurrency(f.available_cash_for_new_purchase)}
               </b>
             </span>
@@ -1032,7 +1032,7 @@ function StayCard({ result }: { result: RunAllResponse }) {
                 </div>
                 <Badge variant="secondary">{formatCurrency(s.total_net_position)}</Badge>
               </div>
-              <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
+              <div className="text-xs font-normal text-stone-600">{config.tagline}</div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5">
@@ -1080,7 +1080,7 @@ function RefinanceCard({ result }: { result: RunAllResponse }) {
                 </div>
                 <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
               </div>
-              <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
+              <div className="text-xs font-normal text-stone-600">{config.tagline}</div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5">
@@ -1142,7 +1142,7 @@ function SellBuyCard({ result }: { result: RunAllResponse }) {
                 </div>
                 <Badge variant="secondary">{formatCurrency(s.total_net_position)}</Badge>
               </div>
-              <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
+              <div className="text-xs font-normal text-stone-600">{config.tagline}</div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5">
@@ -1201,9 +1201,9 @@ function RentCard({ result }: { result: RunAllResponse }) {
                 </div>
                 <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
               </div>
-              <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
+              <div className="text-xs font-normal text-stone-600">{config.tagline}</div>
             </CardTitle>
-            <CardDescription className="text-xs text-slate-600">
+            <CardDescription className="text-xs text-stone-600">
               Keep the house, rent it out. Investment view — doesn't include your
               next housing cost.
             </CardDescription>
@@ -1280,13 +1280,13 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
                   <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
                 </div>
               </div>
-              <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
+              <div className="text-xs font-normal text-stone-600">{config.tagline}</div>
             </CardTitle>
-            <CardDescription className="text-xs text-slate-600">{r.execution_note}</CardDescription>
+            <CardDescription className="text-xs text-stone-600">{r.execution_note}</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <div className="text-xs font-semibold uppercase tracking-wide text-stone-600">
                 Upfront cash
               </div>
               <KV k="Total upfront cash needed" v={formatCurrency(r.total_upfront_cash_needed)} />
@@ -1298,7 +1298,7 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
               />
             </div>
             <div className="space-y-1.5">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <div className="text-xs font-semibold uppercase tracking-wide text-stone-600">
                 Monthly housing (net)
               </div>
               <KV
@@ -1316,7 +1316,7 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
               />
             </div>
             <div className="space-y-1.5 md:col-span-2 border-t pt-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <div className="text-xs font-semibold uppercase tracking-wide text-stone-600">
                 Horizon
               </div>
               <KV
@@ -1361,7 +1361,7 @@ function AuditStrip({ result }: { result: RunAllResponse }) {
           )}
           Audit — {audit.all_passed ? 'all checks passed' : 'items to review'}
         </CardTitle>
-        <CardDescription className="text-xs text-slate-600">
+        <CardDescription className="text-xs text-stone-600">
           Sanity checks against Excel source-of-truth.
         </CardDescription>
       </CardHeader>
@@ -1374,7 +1374,7 @@ function AuditStrip({ result }: { result: RunAllResponse }) {
             <div>
               <span className="font-medium">{c.name}</span>
               {c.notes && (
-                <div className="text-xs text-slate-600">{c.notes}</div>
+                <div className="text-xs text-stone-600">{c.notes}</div>
               )}
             </div>
             <Badge

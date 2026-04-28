@@ -284,7 +284,7 @@ describe('Login Component', () => {
     it('should display dark theme classes', () => {
       const { container } = render(<Login />)
       const mainDiv = container.firstChild as HTMLElement
-      expect(mainDiv).toHaveClass('bg-slate-950')
+      expect(mainDiv).toHaveClass('bg-stone-950')
     })
 
     it('should toggle between sign-in and sign-up text', async () => {

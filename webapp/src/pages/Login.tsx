@@ -12,7 +12,7 @@
  * - JWT token is stored by Supabase client
  *
  * Features:
- * - Dark theme (slate-950 background)
+ * - Dark theme (stone-950 background)
  * - Toggle between sign-in and sign-up modes
  * - Email validation
  * - Password minimum length requirement (6 chars)
@@ -93,20 +93,20 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-stone-950 px-4">
       <div className="w-full max-w-sm space-y-6">
         {/* Brand */}
         <div className="text-center">
           <h1 className="text-3xl font-bold text-white tracking-tight">Saveero</h1>
-          <p className="text-slate-400 text-sm mt-1">Your home decision platform</p>
+          <p className="text-stone-400 text-sm mt-1">Your home decision platform</p>
         </div>
 
-        <Card className="border-slate-800 bg-slate-900 text-slate-100">
+        <Card className="border-stone-800 bg-stone-900 text-stone-100">
           <CardHeader className="pb-4">
             <CardTitle className="text-white">
               {mode === 'signin' ? 'Welcome back' : 'Create an account'}
             </CardTitle>
-            <CardDescription className="text-slate-400">
+            <CardDescription className="text-stone-400">
               {mode === 'signin'
                 ? 'Sign in to access your listings and analysis.'
                 : 'Sign up to get started with Saveero.'}
@@ -128,7 +128,7 @@ export default function Login() {
               )}
 
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-slate-300">Email</Label>
+                <Label htmlFor="email" className="text-stone-300">Email</Label>
                 <Input
                   id="email"
                   type="email"
@@ -137,12 +137,12 @@ export default function Login() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-slate-500"
+                  className="bg-stone-800 border-stone-700 text-white placeholder:text-stone-500 focus:border-stone-500"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-slate-300">Password</Label>
+                <Label htmlFor="password" className="text-stone-300">Password</Label>
                 <Input
                   id="password"
                   type="password"
@@ -152,7 +152,7 @@ export default function Login() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-slate-500"
+                  className="bg-stone-800 border-stone-700 text-white placeholder:text-stone-500 focus:border-stone-500"
                 />
               </div>
             </CardContent>
@@ -168,7 +168,7 @@ export default function Login() {
                   : mode === 'signin' ? 'Sign in' : 'Create account'}
               </Button>
 
-              <p className="text-sm text-slate-400 text-center">
+              <p className="text-sm text-stone-400 text-center">
                 {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
                 <button
                   type="button"

@@ -561,7 +561,7 @@ export default function ScenarioComparison() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Monthly Payment Bar Chart */}
               <div>
-                <p className="text-sm font-medium text-slate-700 mb-3">Monthly Payment</p>
+                <p className="text-sm font-medium text-stone-700 mb-3">Monthly Payment</p>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={scenarios.map((s, i) => ({ name: s.name, value: results[i]?.monthlyTotal ?? 0 }))}>
                     <XAxis dataKey="name" tick={{ fontSize: 12 }} />
@@ -581,7 +581,7 @@ export default function ScenarioComparison() {
 
               {/* Total Cost of Loan Bar Chart */}
               <div>
-                <p className="text-sm font-medium text-slate-700 mb-3">Total Cost of Loan</p>
+                <p className="text-sm font-medium text-stone-700 mb-3">Total Cost of Loan</p>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={scenarios.map((s, i) => ({ name: s.name, value: results[i]?.totalCost ?? 0 }))}>
                     <XAxis dataKey="name" tick={{ fontSize: 12 }} />
@@ -602,7 +602,7 @@ export default function ScenarioComparison() {
               {/* Donut: Principal vs Interest */}
               <div>
                 <div className="flex items-center justify-between mb-3 gap-2">
-                  <p className="text-sm font-medium text-slate-700">Where Your Money Goes</p>
+                  <p className="text-sm font-medium text-stone-700">Where Your Money Goes</p>
                   {scenarios.length > 1 && (
                     <div className="flex gap-1">
                       {scenarios.map((s, i) => (
@@ -617,7 +617,7 @@ export default function ScenarioComparison() {
                                   'bg-violet-500': i === 1,
                                   'bg-emerald-500': i === 2,
                                 })
-                              : 'bg-muted text-slate-600 hover:bg-muted/80',
+                              : 'bg-muted text-stone-600 hover:bg-muted/80',
                           )}
                           title={s.name}
                         >
@@ -656,7 +656,7 @@ export default function ScenarioComparison() {
 
             {/* Stacked Bar: Monthly Payment Composition */}
             <div>
-              <p className="text-sm font-medium text-slate-700 mb-3">Monthly Payment Breakdown</p>
+              <p className="text-sm font-medium text-stone-700 mb-3">Monthly Payment Breakdown</p>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={scenarios.map((s, i) => ({
                   name: s.name,
