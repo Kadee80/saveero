@@ -46,7 +46,7 @@ import {
 import { cn, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ContactPipelineButton, type Pipeline } from '@/components/ContactPipelineButton'
-import { ScenarioWatermark } from '@/components/ScenarioWatermark'
+import { ScenarioIllustration } from '@/components/ScenarioIllustration'
 import {
   Card,
   CardContent,
@@ -998,7 +998,7 @@ function ScenarioDetails({ result }: { result: RunAllResponse }) {
   return (
     <>
       <MonthlyCostCompositionChart result={result} />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="flex flex-col gap-4">
         <StayCard result={result} />
         <RefinanceCard result={result} />
         <SellBuyCard result={result} />
@@ -1014,40 +1014,44 @@ function StayCard({ result }: { result: RunAllResponse }) {
   const config = SCENARIO_CONFIG.stay
   const Icon = config.icon
   return (
-    <Card className="relative isolate overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
-      <ScenarioWatermark scene="stay" color={config.color} />
-      <CardHeader>
-        <CardTitle className="space-y-2 text-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="rounded-full p-2.5 text-white"
-                style={{ backgroundColor: config.color }}
-              >
-                <Icon className="h-5 w-5" />
+    <Card className="overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
+      <div className="flex flex-col md:flex-row">
+        <ScenarioIllustration scene="stay" color={config.color} />
+        <div className="min-w-0 flex-1">
+          <CardHeader>
+            <CardTitle className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="rounded-full p-2.5 text-white"
+                    style={{ backgroundColor: config.color }}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <span>Stay</span>
+                </div>
+                <Badge variant="secondary">{formatCurrency(s.total_net_position)}</Badge>
               </div>
-              <span>Stay</span>
+              <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            <KV k="Monthly P&I" v={formatCurrency(s.current_monthly_pi)} />
+            <KV
+              k="Total monthly ownership cost"
+              v={formatCurrency(s.total_monthly_ownership_cost)}
+              bold
+            />
+            <KV k="Future home value" v={formatCurrency(s.future_home_value)} />
+            <KV k="Future mortgage balance" v={formatCurrency(s.future_mortgage_balance)} />
+            <KV k="Gross equity" v={formatCurrency(s.gross_equity)} />
+            <KV k="Net equity at horizon" v={formatCurrency(s.net_equity_at_horizon)} bold />
+            <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
+              <ContactPipelineButton pipeline="financial-planner" />
             </div>
-            <Badge variant="secondary">{formatCurrency(s.total_net_position)}</Badge>
-          </div>
-          <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-1.5">
-        <KV k="Monthly P&I" v={formatCurrency(s.current_monthly_pi)} />
-        <KV
-          k="Total monthly ownership cost"
-          v={formatCurrency(s.total_monthly_ownership_cost)}
-          bold
-        />
-        <KV k="Future home value" v={formatCurrency(s.future_home_value)} />
-        <KV k="Future mortgage balance" v={formatCurrency(s.future_mortgage_balance)} />
-        <KV k="Gross equity" v={formatCurrency(s.gross_equity)} />
-        <KV k="Net equity at horizon" v={formatCurrency(s.net_equity_at_horizon)} bold />
-        <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
-          <ContactPipelineButton pipeline="financial-planner" />
+          </CardContent>
         </div>
-      </CardContent>
+      </div>
     </Card>
   )
 }
@@ -1058,55 +1062,59 @@ function RefinanceCard({ result }: { result: RunAllResponse }) {
   const config = SCENARIO_CONFIG.refinance
   const Icon = config.icon
   return (
-    <Card className="relative isolate overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
-      <ScenarioWatermark scene="refinance" color={config.color} />
-      <CardHeader>
-        <CardTitle className="space-y-2 text-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="rounded-full p-2.5 text-white"
-                style={{ backgroundColor: config.color }}
-              >
-                <Icon className="h-5 w-5" />
+    <Card className="overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
+      <div className="flex flex-col md:flex-row">
+        <ScenarioIllustration scene="refinance" color={config.color} />
+        <div className="min-w-0 flex-1">
+          <CardHeader>
+            <CardTitle className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="rounded-full p-2.5 text-white"
+                    style={{ backgroundColor: config.color }}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <span>Refinance</span>
+                </div>
+                <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
               </div>
-              <span>Refinance</span>
+              <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            <KV k="New loan amount" v={formatCurrency(r.new_loan_amount)} />
+            <KV k="New monthly P&I" v={formatCurrency(r.new_monthly_pi)} />
+            <KV
+              k="Monthly payment change"
+              v={`${saves ? '−' : '+'}${formatCurrency(Math.abs(r.monthly_payment_change))}`}
+            />
+            <KV k="Cash to close" v={formatCurrency(r.cash_to_close)} />
+            <KV
+              k="Break-even"
+              v={r.break_even_months == null ? 'N/A (no savings)' : `${r.break_even_months} mo`}
+            />
+            <KV
+              k="Cumulative payment savings"
+              v={formatCurrency(r.cumulative_payment_savings)}
+              bold
+            />
+            <KV
+              k="Total monthly cost"
+              v={formatCurrency(r.total_monthly_ownership_cost)}
+            />
+            <KV
+              k="Net equity at horizon"
+              v={formatCurrency(r.net_equity_at_horizon)}
+              bold
+            />
+            <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
+              <ContactPipelineButton pipeline="mortgage-broker" />
             </div>
-            <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
-          </div>
-          <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-1.5">
-        <KV k="New loan amount" v={formatCurrency(r.new_loan_amount)} />
-        <KV k="New monthly P&I" v={formatCurrency(r.new_monthly_pi)} />
-        <KV
-          k="Monthly payment change"
-          v={`${saves ? '−' : '+'}${formatCurrency(Math.abs(r.monthly_payment_change))}`}
-        />
-        <KV k="Cash to close" v={formatCurrency(r.cash_to_close)} />
-        <KV
-          k="Break-even"
-          v={r.break_even_months == null ? 'N/A (no savings)' : `${r.break_even_months} mo`}
-        />
-        <KV
-          k="Cumulative payment savings"
-          v={formatCurrency(r.cumulative_payment_savings)}
-          bold
-        />
-        <KV
-          k="Total monthly cost"
-          v={formatCurrency(r.total_monthly_ownership_cost)}
-        />
-        <KV
-          k="Net equity at horizon"
-          v={formatCurrency(r.net_equity_at_horizon)}
-          bold
-        />
-        <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
-          <ContactPipelineButton pipeline="mortgage-broker" />
+          </CardContent>
         </div>
-      </CardContent>
+      </div>
     </Card>
   )
 }
@@ -1116,50 +1124,54 @@ function SellBuyCard({ result }: { result: RunAllResponse }) {
   const config = SCENARIO_CONFIG.sell_buy
   const Icon = config.icon
   return (
-    <Card className="relative isolate overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
-      <ScenarioWatermark scene="sell_buy" color={config.color} />
-      <CardHeader>
-        <CardTitle className="space-y-2 text-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="rounded-full p-2.5 text-white"
-                style={{ backgroundColor: config.color }}
-              >
-                <Icon className="h-5 w-5" />
+    <Card className="overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
+      <div className="flex flex-col md:flex-row">
+        <ScenarioIllustration scene="sell_buy" color={config.color} />
+        <div className="min-w-0 flex-1">
+          <CardHeader>
+            <CardTitle className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="rounded-full p-2.5 text-white"
+                    style={{ backgroundColor: config.color }}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <span>Sell &amp; Buy</span>
+                </div>
+                <Badge variant="secondary">{formatCurrency(s.total_net_position)}</Badge>
               </div>
-              <span>Sell &amp; Buy</span>
+              <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            <KV k="Sale proceeds (net of payoff)" v={formatCurrency(s.net_sale_proceeds_before_reserve)} />
+            <KV k="Cash available for next purchase" v={formatCurrency(s.cash_available_for_next_purchase)} />
+            <KV k="Required down payment" v={formatCurrency(s.required_down_payment)} />
+            <KV k="New loan amount" v={formatCurrency(s.new_purchase_loan_amount)} />
+            <KV k="New monthly P&I" v={formatCurrency(s.new_monthly_pi)} />
+            <KV k="Cash remaining at close" v={formatCurrency(s.cash_remaining_at_close)} />
+            <KV
+              k="Total monthly cost"
+              v={formatCurrency(s.total_monthly_ownership_cost)}
+            />
+            <KV
+              k="Monthly cost change vs stay"
+              v={formatCurrency(s.monthly_ownership_cost_change_vs_stay)}
+            />
+            <KV
+              k="Net equity at horizon"
+              v={formatCurrency(s.net_equity_at_horizon)}
+              bold
+            />
+            <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
+              <ContactPipelineButton pipeline="real-estate-agent" />
+              <ContactPipelineButton pipeline="mortgage-broker" />
             </div>
-            <Badge variant="secondary">{formatCurrency(s.total_net_position)}</Badge>
-          </div>
-          <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-1.5">
-        <KV k="Sale proceeds (net of payoff)" v={formatCurrency(s.net_sale_proceeds_before_reserve)} />
-        <KV k="Cash available for next purchase" v={formatCurrency(s.cash_available_for_next_purchase)} />
-        <KV k="Required down payment" v={formatCurrency(s.required_down_payment)} />
-        <KV k="New loan amount" v={formatCurrency(s.new_purchase_loan_amount)} />
-        <KV k="New monthly P&I" v={formatCurrency(s.new_monthly_pi)} />
-        <KV k="Cash remaining at close" v={formatCurrency(s.cash_remaining_at_close)} />
-        <KV
-          k="Total monthly cost"
-          v={formatCurrency(s.total_monthly_ownership_cost)}
-        />
-        <KV
-          k="Monthly cost change vs stay"
-          v={formatCurrency(s.monthly_ownership_cost_change_vs_stay)}
-        />
-        <KV
-          k="Net equity at horizon"
-          v={formatCurrency(s.net_equity_at_horizon)}
-          bold
-        />
-        <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
-          <ContactPipelineButton pipeline="real-estate-agent" />
-          <ContactPipelineButton pipeline="mortgage-broker" />
+          </CardContent>
         </div>
-      </CardContent>
+      </div>
     </Card>
   )
 }
@@ -1171,54 +1183,58 @@ function RentCard({ result }: { result: RunAllResponse }) {
   const config = SCENARIO_CONFIG.rent
   const Icon = config.icon
   return (
-    <Card className="relative isolate overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
-      <ScenarioWatermark scene="rent" color={config.color} />
-      <CardHeader>
-        <CardTitle className="space-y-2 text-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="rounded-full p-2.5 text-white"
-                style={{ backgroundColor: config.color }}
-              >
-                <Icon className="h-5 w-5" />
+    <Card className="overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
+      <div className="flex flex-col md:flex-row">
+        <ScenarioIllustration scene="rent" color={config.color} />
+        <div className="min-w-0 flex-1">
+          <CardHeader>
+            <CardTitle className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="rounded-full p-2.5 text-white"
+                    style={{ backgroundColor: config.color }}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <span>Rent (current home)</span>
+                </div>
+                <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
               </div>
-              <span>Rent (current home)</span>
+              <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
+            </CardTitle>
+            <CardDescription className="text-xs text-slate-600">
+              Keep the house, rent it out. Investment view — doesn't include your
+              next housing cost.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            <KV k="Effective rent collected" v={formatCurrency(mf.effective_rent_collected)} />
+            <KV k="Operating expenses" v={formatCurrency(mf.total_operating_expenses_before_debt)} />
+            <KV k="P&I" v={formatCurrency(mf.current_monthly_pi)} />
+            <KV k="Monthly cash flow (pre-tax)" v={formatCurrency(mf.monthly_cash_flow_before_tax)} />
+            <KV k="Monthly tax benefit" v={formatCurrency(tv.monthly_tax_benefit)} />
+            <KV
+              k="Monthly cash flow (after tax)"
+              v={formatCurrency(tv.monthly_cash_flow_after_tax)}
+              bold
+            />
+            <KV
+              k="Cumulative cash flow"
+              v={formatCurrency(r.cumulative_after_tax_rental_cash_flow)}
+            />
+            <KV
+              k="Net equity at horizon"
+              v={formatCurrency(r.net_equity_at_horizon)}
+              bold
+            />
+            <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
+              <ContactPipelineButton pipeline="real-estate-agent" />
+              <ContactPipelineButton pipeline="financial-planner" />
             </div>
-            <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
-          </div>
-          <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
-        </CardTitle>
-        <CardDescription className="text-xs text-slate-600">
-          Keep the house, rent it out. Investment view — doesn't include your
-          next housing cost.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-1.5">
-        <KV k="Effective rent collected" v={formatCurrency(mf.effective_rent_collected)} />
-        <KV k="Operating expenses" v={formatCurrency(mf.total_operating_expenses_before_debt)} />
-        <KV k="P&I" v={formatCurrency(mf.current_monthly_pi)} />
-        <KV k="Monthly cash flow (pre-tax)" v={formatCurrency(mf.monthly_cash_flow_before_tax)} />
-        <KV k="Monthly tax benefit" v={formatCurrency(tv.monthly_tax_benefit)} />
-        <KV
-          k="Monthly cash flow (after tax)"
-          v={formatCurrency(tv.monthly_cash_flow_after_tax)}
-          bold
-        />
-        <KV
-          k="Cumulative cash flow"
-          v={formatCurrency(r.cumulative_after_tax_rental_cash_flow)}
-        />
-        <KV
-          k="Net equity at horizon"
-          v={formatCurrency(r.net_equity_at_horizon)}
-          bold
-        />
-        <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
-          <ContactPipelineButton pipeline="real-estate-agent" />
-          <ContactPipelineButton pipeline="financial-planner" />
+          </CardContent>
         </div>
-      </CardContent>
+      </div>
     </Card>
   )
 }
@@ -1234,96 +1250,100 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
   const config = SCENARIO_CONFIG.rent_out_buy
   const Icon = config.icon
   return (
-    <Card className="relative isolate overflow-hidden border-t-4 lg:col-span-2" style={{ borderTopColor: config.color }}>
-      <ScenarioWatermark scene="rent_out_buy" color={config.color} size={280} />
-      <CardHeader>
-        <CardTitle className="space-y-2 text-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="rounded-full p-2.5 text-white"
-                style={{ backgroundColor: config.color }}
-              >
-                <Icon className="h-5 w-5" />
+    <Card className="overflow-hidden border-t-4" style={{ borderTopColor: config.color }}>
+      <div className="flex flex-col md:flex-row">
+        <ScenarioIllustration scene="rent_out_buy" color={config.color} />
+        <div className="min-w-0 flex-1">
+          <CardHeader>
+            <CardTitle className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="rounded-full p-2.5 text-white"
+                    style={{ backgroundColor: config.color }}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <span>Rent Out &amp; Buy</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      statusTone === 'good' && 'border-emerald-400 text-emerald-700',
+                      statusTone === 'warn' && 'border-amber-400 text-amber-700',
+                      statusTone === 'bad' && 'border-red-400 text-red-700',
+                    )}
+                  >
+                    {r.liquidity_status}
+                  </Badge>
+                  <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
+                </div>
               </div>
-              <span>Rent Out &amp; Buy</span>
+              <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
+            </CardTitle>
+            <CardDescription className="text-xs text-slate-600">{r.execution_note}</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Upfront cash
+              </div>
+              <KV k="Total upfront cash needed" v={formatCurrency(r.total_upfront_cash_needed)} />
+              <KV k="Cash available" v={formatCurrency(r.available_cash_for_purchase)} />
+              <KV
+                k={r.cash_surplus_or_shortfall >= 0 ? 'Surplus' : 'Shortfall'}
+                v={formatCurrency(r.cash_surplus_or_shortfall)}
+                bold
+              />
             </div>
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="outline"
-                className={cn(
-                  statusTone === 'good' && 'border-emerald-400 text-emerald-700',
-                  statusTone === 'warn' && 'border-amber-400 text-amber-700',
-                  statusTone === 'bad' && 'border-red-400 text-red-700',
-                )}
-              >
-                {r.liquidity_status}
-              </Badge>
-              <Badge variant="secondary">{formatCurrency(r.total_net_position)}</Badge>
+            <div className="space-y-1.5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Monthly housing (net)
+              </div>
+              <KV
+                k="Before tax"
+                v={formatCurrency(r.net_monthly_housing_cost_before_tax)}
+              />
+              <KV
+                k="After tax"
+                v={formatCurrency(r.net_monthly_housing_cost_after_tax)}
+                bold
+              />
+              <KV
+                k="Δ vs stay (after tax)"
+                v={formatCurrency(r.after_tax_monthly_impact_vs_stay)}
+              />
             </div>
-          </div>
-          <div className="text-xs font-normal text-slate-600">{config.tagline}</div>
-        </CardTitle>
-        <CardDescription className="text-xs text-slate-600">{r.execution_note}</CardDescription>
-      </CardHeader>
-      <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="space-y-1.5">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Upfront cash
-          </div>
-          <KV k="Total upfront cash needed" v={formatCurrency(r.total_upfront_cash_needed)} />
-          <KV k="Cash available" v={formatCurrency(r.available_cash_for_purchase)} />
-          <KV
-            k={r.cash_surplus_or_shortfall >= 0 ? 'Surplus' : 'Shortfall'}
-            v={formatCurrency(r.cash_surplus_or_shortfall)}
-            bold
-          />
+            <div className="space-y-1.5 md:col-span-2 border-t pt-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Horizon
+              </div>
+              <KV
+                k="Current home net equity"
+                v={formatCurrency(r.current_home_net_equity_at_horizon)}
+              />
+              <KV
+                k="New home net equity"
+                v={formatCurrency(r.new_home_net_equity_at_horizon)}
+              />
+              <KV
+                k="Cumulative rental cash flow"
+                v={formatCurrency(r.cumulative_after_tax_rental_cash_flow)}
+              />
+              <KV
+                k="Total net position"
+                v={formatCurrency(r.total_net_position)}
+                bold
+              />
+            </div>
+            <div className="flex flex-wrap gap-2 border-t pt-3 md:col-span-2">
+              <ContactPipelineButton pipeline="real-estate-agent" />
+              <ContactPipelineButton pipeline="mortgage-broker" />
+            </div>
+          </CardContent>
         </div>
-        <div className="space-y-1.5">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Monthly housing (net)
-          </div>
-          <KV
-            k="Before tax"
-            v={formatCurrency(r.net_monthly_housing_cost_before_tax)}
-          />
-          <KV
-            k="After tax"
-            v={formatCurrency(r.net_monthly_housing_cost_after_tax)}
-            bold
-          />
-          <KV
-            k="Δ vs stay (after tax)"
-            v={formatCurrency(r.after_tax_monthly_impact_vs_stay)}
-          />
-        </div>
-        <div className="space-y-1.5 md:col-span-2 border-t pt-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Horizon
-          </div>
-          <KV
-            k="Current home net equity"
-            v={formatCurrency(r.current_home_net_equity_at_horizon)}
-          />
-          <KV
-            k="New home net equity"
-            v={formatCurrency(r.new_home_net_equity_at_horizon)}
-          />
-          <KV
-            k="Cumulative rental cash flow"
-            v={formatCurrency(r.cumulative_after_tax_rental_cash_flow)}
-          />
-          <KV
-            k="Total net position"
-            v={formatCurrency(r.total_net_position)}
-            bold
-          />
-        </div>
-        <div className="flex flex-wrap gap-2 border-t pt-3 md:col-span-2">
-          <ContactPipelineButton pipeline="real-estate-agent" />
-          <ContactPipelineButton pipeline="mortgage-broker" />
-        </div>
-      </CardContent>
+      </div>
     </Card>
   )
 }
