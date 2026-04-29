@@ -53,6 +53,7 @@ import {
   type AnalyzeMortgageResponse,
 } from '@/api/mortgageApi';
 import { fetchCurrentRates, type CurrentRates } from '@/api/ratesApi';
+import { SCENARIO_PALETTE, CHART_NEGATIVE } from '@/lib/chartPalette';
 
 /**
  * UI-shaped mortgage summary. Mirrors the camelCase shape the original
@@ -167,12 +168,14 @@ function pct(value: number, total: number) {
  * <BreakdownBar monthly={summary.monthly} />
  */
 function BreakdownBar({ monthly }: { monthly: MortgageSummary['monthly'] }) {
+  // Hex fills from the shared chart palette so this bar matches the
+  // monthly-cost stacks on DecisionMap and ScenarioComparison.
   const segments = [
-    { label: 'P&I', value: monthly.principal + monthly.interest, color: 'bg-blue-500' },
-    { label: 'Tax', value: monthly.propertyTax, color: 'bg-amber-400' },
-    { label: 'Ins.', value: monthly.insurance, color: 'bg-green-500' },
-    { label: 'PMI', value: monthly.pmi, color: 'bg-red-400' },
-    { label: 'HOA', value: monthly.hoa, color: 'bg-purple-400' },
+    { label: 'P&I', value: monthly.principal + monthly.interest, color: SCENARIO_PALETTE.blue },
+    { label: 'Tax', value: monthly.propertyTax, color: SCENARIO_PALETTE.amber },
+    { label: 'Ins.', value: monthly.insurance, color: SCENARIO_PALETTE.emerald },
+    { label: 'PMI', value: monthly.pmi, color: CHART_NEGATIVE },
+    { label: 'HOA', value: monthly.hoa, color: SCENARIO_PALETTE.violet },
   ].filter((s) => s.value > 0);
 
   const total = monthly.total;
@@ -183,15 +186,18 @@ function BreakdownBar({ monthly }: { monthly: MortgageSummary['monthly'] }) {
         {segments.map((s) => (
           <div
             key={s.label}
-            className={cn('h-full transition-all', s.color)}
-            style={{ width: `${pct(s.value, total)}%` }}
+            className="h-full transition-all"
+            style={{ width: `${pct(s.value, total)}%`, backgroundColor: s.color }}
           />
         ))}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
         {segments.map((s) => (
           <span key={s.label} className="flex items-center gap-1">
-            <span className={cn('inline-block h-2 w-2 rounded-full', s.color)} />
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ backgroundColor: s.color }}
+            />
             {s.label} {pct(s.value, total)}%
           </span>
         ))}
