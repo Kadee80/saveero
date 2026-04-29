@@ -41,6 +41,11 @@ import { Badge } from '@/components/ui/badge';
 import { analyzeMortgage, calcMonthlyPayment } from '@/lib/mortgage';
 import { fetchCurrentRates, type CurrentRates } from '@/api/ratesApi';
 import {
+  SCENARIO_PALETTE,
+  CHART_NEGATIVE,
+  TOOLTIP_STYLE,
+} from '@/lib/chartPalette';
+import {
   BarChart,
   Bar,
   XAxis,
@@ -97,14 +102,32 @@ const DEFAULT_SCENARIOS: Scenario[] = [
  * Color scheme for scenario cards (border, background, text)
  * Index corresponds to scenario position (0-2)
  */
-const SCENARIO_COLORS = ['border-blue-400', 'border-violet-400', 'border-emerald-400'];
-const SCENARIO_BG     = ['bg-blue-50',      'bg-violet-50',      'bg-emerald-50'];
-const SCENARIO_TEXT   = ['text-blue-700',   'text-violet-700',   'text-emerald-700'];
-
 /**
- * Chart color scheme for scenarios (hex format for recharts)
+ * Chart color scheme for scenarios (hex format for recharts).
+ * Same color drives the card accent strip, soft tint background, and
+ * headline text — which keeps the bar chart and the scenario card it
+ * belongs to visually linked.
  */
-const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#10b981'];
+const CHART_COLORS = [
+  SCENARIO_PALETTE.blue,
+  SCENARIO_PALETTE.violet,
+  SCENARIO_PALETTE.emerald,
+];
+
+/** Top-border accent color for a scenario card. */
+const scenarioBorderStyle = (i: number) => ({
+  borderTopColor: CHART_COLORS[i],
+});
+
+/** Soft ~10% tint for icon backgrounds and stat blocks. */
+const scenarioTintStyle = (i: number) => ({
+  backgroundColor: `${CHART_COLORS[i]}1a`,
+});
+
+/** Headline / accent text color. */
+const scenarioTextStyle = (i: number) => ({
+  color: CHART_COLORS[i],
+});
 
 /**
  * Hero icons and taglines for scenario cards by index
@@ -433,13 +456,17 @@ export default function ScenarioComparison() {
         {scenarios.map((s, i) => {
           const IconComponent = SCENARIO_ICONS[i];
           return (
-          <Card key={s.id} className={cn('relative isolate overflow-hidden border-t-4', SCENARIO_COLORS[i])}>
+          <Card
+            key={s.id}
+            className="relative isolate overflow-hidden border-t-4"
+            style={scenarioBorderStyle(i)}
+          >
             <ScenarioWatermark scene={SCENARIO_WATERMARKS[i]} color={CHART_COLORS[i]} />
             <CardContent className="space-y-4 pt-4">
               {/* Hero icon */}
               <div className="flex items-center gap-3">
-                <div className={cn('rounded-lg p-2', SCENARIO_BG[i])}>
-                  <IconComponent className={cn('h-6 w-6', SCENARIO_TEXT[i])} />
+                <div className="rounded-lg p-2" style={scenarioTintStyle(i)}>
+                  <IconComponent className="h-6 w-6" style={scenarioTextStyle(i)} />
                 </div>
                 <div className="flex-1">
                   <Input
@@ -447,7 +474,7 @@ export default function ScenarioComparison() {
                     onChange={(e) => updateScenario(s.id, { name: e.target.value })}
                     className="font-semibold"
                   />
-                  <p className={cn('text-xs font-medium mt-1', SCENARIO_TEXT[i])}>
+                  <p className="text-xs font-medium mt-1" style={scenarioTextStyle(i)}>
                     {SCENARIO_TAGLINES[i]}
                   </p>
                 </div>
@@ -528,9 +555,9 @@ export default function ScenarioComparison() {
               </div>
 
               {/* Monthly total hero */}
-              <div className={cn('rounded-lg px-4 py-3', SCENARIO_BG[i])}>
+              <div className="rounded-lg px-4 py-3" style={scenarioTintStyle(i)}>
                 <p className="text-xs font-medium text-muted-foreground">Monthly payment</p>
-                <p className={cn('text-2xl font-bold tabular-nums', SCENARIO_TEXT[i])}>
+                <p className="text-2xl font-bold tabular-nums" style={scenarioTextStyle(i)}>
                   {formatCurrency(results[i]?.monthlyTotal ?? 0)}
                 </p>
                 {results[i]?.monthlyTotal === bestMonthly && scenarios.length > 1 && (
@@ -568,9 +595,9 @@ export default function ScenarioComparison() {
                     <YAxis tick={{ fontSize: 12 }} />
                     <Tooltip
                       formatter={(value) => formatCurrency(Number(value))}
-                      contentStyle={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}
+                      contentStyle={TOOLTIP_STYLE}
                     />
-                    <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                    <Bar dataKey="value" fill={SCENARIO_PALETTE.blue} radius={[4, 4, 0, 0]}>
                       {scenarios.map((_, i) => (
                         <Cell key={`cell-${i}`} fill={CHART_COLORS[i]} />
                       ))}
@@ -588,9 +615,9 @@ export default function ScenarioComparison() {
                     <YAxis tick={{ fontSize: 12 }} />
                     <Tooltip
                       formatter={(value) => formatCurrency(Number(value))}
-                      contentStyle={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}
+                      contentStyle={TOOLTIP_STYLE}
                     />
-                    <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                    <Bar dataKey="value" fill={SCENARIO_PALETTE.blue} radius={[4, 4, 0, 0]}>
                       {scenarios.map((_, i) => (
                         <Cell key={`cell-${i}`} fill={CHART_COLORS[i]} />
                       ))}
@@ -612,13 +639,14 @@ export default function ScenarioComparison() {
                           className={cn(
                             'px-2 py-1 rounded text-xs font-medium transition-colors',
                             activeDonutScenario === i
-                              ? cn('text-white', {
-                                  'bg-blue-500': i === 0,
-                                  'bg-violet-500': i === 1,
-                                  'bg-emerald-500': i === 2,
-                                })
+                              ? 'text-white'
                               : 'bg-muted text-stone-600 hover:bg-muted/80',
                           )}
+                          style={
+                            activeDonutScenario === i
+                              ? { backgroundColor: CHART_COLORS[i] }
+                              : undefined
+                          }
                           title={s.name}
                         >
                           {i + 1}
@@ -641,12 +669,12 @@ export default function ScenarioComparison() {
                       paddingAngle={2}
                       dataKey="value"
                     >
-                      <Cell fill="#3b82f6" />
-                      <Cell fill="#ef4444" />
+                      <Cell fill={SCENARIO_PALETTE.blue} />
+                      <Cell fill={CHART_NEGATIVE} />
                     </Pie>
                     <Tooltip
                       formatter={(value) => formatCurrency(Number(value))}
-                      contentStyle={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}
+                      contentStyle={TOOLTIP_STYLE}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                   </PieChart>
@@ -670,14 +698,14 @@ export default function ScenarioComparison() {
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip
                     formatter={(value) => formatCurrency(Number(value))}
-                    contentStyle={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}
+                    contentStyle={TOOLTIP_STYLE}
                   />
                   <Legend />
-                  <Bar dataKey="P&I" stackId="a" fill="#3b82f6" />
-                  <Bar dataKey="Tax" stackId="a" fill="#f59e0b" />
-                  <Bar dataKey="Insurance" stackId="a" fill="#10b981" />
-                  <Bar dataKey="PMI" stackId="a" fill="#ef4444" />
-                  <Bar dataKey="HOA" stackId="a" fill="#8b5cf6" />
+                  <Bar dataKey="P&I" stackId="a" fill={SCENARIO_PALETTE.blue} />
+                  <Bar dataKey="Tax" stackId="a" fill={SCENARIO_PALETTE.amber} />
+                  <Bar dataKey="Insurance" stackId="a" fill={SCENARIO_PALETTE.emerald} />
+                  <Bar dataKey="PMI" stackId="a" fill={CHART_NEGATIVE} />
+                  <Bar dataKey="HOA" stackId="a" fill={SCENARIO_PALETTE.violet} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -703,7 +731,11 @@ export default function ScenarioComparison() {
               <tr className="border-b text-left">
                 <th className="pb-3 pr-4 font-medium text-muted-foreground w-48">Metric</th>
                 {scenarios.map((s, i) => (
-                  <th key={s.id} className={cn('pb-3 pr-4 font-semibold', SCENARIO_TEXT[i])}>
+                  <th
+                    key={s.id}
+                    className="pb-3 pr-4 font-semibold"
+                    style={scenarioTextStyle(i)}
+                  >
                     {s.name}
                   </th>
                 ))}
@@ -729,7 +761,7 @@ export default function ScenarioComparison() {
                             isWinner && 'font-bold',
                           )}
                         >
-                          <span className={cn(isWinner && SCENARIO_TEXT[i])}>
+                          <span style={isWinner ? scenarioTextStyle(i) : undefined}>
                             {row.format(val)}
                           </span>
                           {isWinner && (
@@ -751,9 +783,9 @@ export default function ScenarioComparison() {
                     return (
                       <td key={scenarios[i].id} className="py-2.5 pr-4 font-medium tabular-nums">
                         {savings === 0 ? (
-                          <span className={SCENARIO_TEXT[i]}>—</span>
+                          <span style={scenarioTextStyle(i)}>—</span>
                         ) : (
-                          <span className="text-red-600">+{formatCurrency(savings)}/mo</span>
+                          <span style={{ color: CHART_NEGATIVE }}>+{formatCurrency(savings)}/mo</span>
                         )}
                       </td>
                     );

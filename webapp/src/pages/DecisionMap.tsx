@@ -64,6 +64,11 @@ import {
   type RunAllResponse,
   type ComparisonRowOut,
 } from '@/api/scenarioApi'
+import {
+  SCENARIO_PALETTE,
+  CHART_SERIES,
+  TOOLTIP_STYLE,
+} from '@/lib/chartPalette'
 
 // ---------------------------------------------------------------------------
 // Scenario colors and metadata
@@ -72,31 +77,31 @@ import {
 const SCENARIO_CONFIG = {
   stay: {
     label: 'Stay',
-    color: '#3b82f6', // blue
+    color: SCENARIO_PALETTE.blue, // dusty sky blue
     icon: Home,
     tagline: 'No move, no closing costs',
   },
   refinance: {
     label: 'Refinance',
-    color: '#8b5cf6', // violet
+    color: SCENARIO_PALETTE.violet, // muted plum
     icon: Banknote,
     tagline: 'Same house, lower rate',
   },
   sell_buy: {
     label: 'Sell & Buy',
-    color: '#10b981', // emerald
+    color: SCENARIO_PALETTE.emerald, // sage green
     icon: Building2,
     tagline: 'New house, fresh mortgage',
   },
   rent: {
     label: 'Rent (current home)',
-    color: '#f59e0b', // amber
+    color: SCENARIO_PALETTE.amber, // warm mustard
     icon: PiggyBank,
     tagline: 'Income property, stay flexible',
   },
   rent_out_buy: {
     label: 'Rent Out & Buy',
-    color: '#f43f5e', // rose
+    color: SCENARIO_PALETTE.rose, // terracotta
     icon: KeyRound,
     tagline: 'Two homes, two mortgages — biggest upside, biggest risk',
   },
@@ -480,9 +485,9 @@ function TotalNetPositionChart({ result }: { result: RunAllResponse }) {
             <YAxis tick={{ fontSize: 12 }} />
             <Tooltip
               formatter={(value) => formatCurrency(value as number)}
-              contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}
+              contentStyle={TOOLTIP_STYLE}
             />
-            <Bar dataKey="value" fill="#3b82f6">
+            <Bar dataKey="value" fill={SCENARIO_PALETTE.blue}>
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={colors[index]} />
               ))}
@@ -565,14 +570,14 @@ function MonthlyCostCompositionChart({ result }: { result: RunAllResponse }) {
             <YAxis tick={{ fontSize: 12 }} />
             <Tooltip
               formatter={(value) => formatCurrency(value as number)}
-              contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}
+              contentStyle={TOOLTIP_STYLE}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="pi" stackId="a" fill="#3b82f6" name="P&I" />
-            <Bar dataKey="property_tax" stackId="a" fill="#8b5cf6" name="Property tax" />
-            <Bar dataKey="insurance" stackId="a" fill="#10b981" name="Insurance" />
-            <Bar dataKey="hoa" stackId="a" fill="#f59e0b" name="HOA" />
-            <Bar dataKey="maintenance" stackId="a" fill="#f43f5e" name="Maintenance" />
+            <Bar dataKey="pi" stackId="a" fill={SCENARIO_PALETTE.blue} name="P&I" />
+            <Bar dataKey="property_tax" stackId="a" fill={SCENARIO_PALETTE.violet} name="Property tax" />
+            <Bar dataKey="insurance" stackId="a" fill={SCENARIO_PALETTE.emerald} name="Insurance" />
+            <Bar dataKey="hoa" stackId="a" fill={SCENARIO_PALETTE.amber} name="HOA" />
+            <Bar dataKey="maintenance" stackId="a" fill={SCENARIO_PALETTE.rose} name="Maintenance" />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
@@ -616,15 +621,7 @@ function RentEquityCompositionChart({ result }: { result: RunAllResponse }) {
 
   if (data.length === 0) return null
 
-  const colors = [
-    '#3b82f6',
-    '#8b5cf6',
-    '#10b981',
-    '#f59e0b',
-    '#f43f5e',
-    '#ec4899',
-    '#6366f1',
-  ]
+  const colors = CHART_SERIES
 
   return (
     <Card className="mb-6">
@@ -653,7 +650,7 @@ function RentEquityCompositionChart({ result }: { result: RunAllResponse }) {
             </Pie>
             <Tooltip
               formatter={(value) => formatCurrency(value as number)}
-              contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}
+              contentStyle={TOOLTIP_STYLE}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
           </PieChart>
