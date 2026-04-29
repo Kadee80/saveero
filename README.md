@@ -1,118 +1,113 @@
 # Saveero
 
-AI-powered home decision platform for real estate agents. Upload property photos, generate complete MLS listings, analyze mortgage scenarios, and manage all your listings from one dashboard.
+A web platform that analyzes a homeowner's financial situation, models five housing scenarios, and ranks them by expected wealth outcome. Every number is derived from inputs the homeowner provides—no black boxes, no generic advice.
+
+**The five scenarios:**
+1. **Stay** — keep the home and current mortgage (baseline)
+2. **Refinance** — keep the home, replace the loan at a lower rate
+3. **Sell + Buy** — sell current home and purchase a replacement
+4. **Rent Out** — convert current home to a rental
+5. **Rent Out & Buy** — retain current home as rental + simultaneously purchase new primary
 
 ## Features
 
-- **AI Listing Wizard** — upload photos and get a fully written listing with pricing, comps, and highlights in seconds
-- **Mortgage Calculator** — live rates from the Federal Reserve FRED API with payment breakdowns
-- **Scenario Comparison** — compare up to 3 loan options side by side
-- **Dashboard** — manage all saved listings with status tracking
-- **Auth** — secure login/signup via Supabase
+- **Scenario Comparison Engine** — Model all 5 housing decisions with transparent calculations
+- **Decision Map** — Get recommendations ranked by wealth outcome with feasibility checks
+- **Lead Capture** — Professional notifications when homeowners complete analysis (coming Month 2)
+- **Lead Generation** — Three customer segments: mortgage banks, realtors, financial planners
+- **Multi-tenant Branding** — White-label portal for professionals (coming Month 3)
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React + Vite + TypeScript + Tailwind CSS |
+| Frontend | React 18 + Vite 5 + TypeScript + Tailwind CSS |
 | Backend | FastAPI + Python 3.11 |
-| Database + Auth | Supabase (Postgres + JWT) |
+| Core Engine | Pure Python (stateless scenario calculations) |
+| Database + Auth | Supabase (PostgreSQL + JWT) |
 | AI | OpenRouter (vision + text models) |
 | Frontend hosting | Vercel |
 | Backend hosting | Render |
 
-## Frontend Architecture
+## Architecture Overview
 
-The Saveero frontend is a **React 18 + Vite 5 + TypeScript SPA** that provides an intuitive interface for real estate agents to generate AI listings, calculate mortgages, and manage properties.
+The platform is built in three layers:
 
-**Key highlights:**
-- **Type-safe** — Full TypeScript coverage with no `any` types
-- **Responsive design** — Mobile-first Tailwind CSS with dark theme
-- **Real-time calculations** — Interactive mortgage calculator with live Federal Reserve rates
-- **AI-powered workflow** — 3-step listing wizard with photo analysis
-- **Secure authentication** — Supabase JWT + automatic token refresh
+**1. Scenario Engine** (`scenarios/` module)
+- Pure Python, stateless, deterministic calculations
+- Models 5 housing scenarios + Decision Map + Audit trail
+- No I/O dependencies; runs in < 100ms on 45 inputs
+- See [SCENARIOS.md](./SCENARIOS.md) for detailed calculation logic
 
-**Main pages:**
-- **Dashboard** (`/`) — View all saved listings with status and pricing
-- **List Property** (`/list-property`) — 3-step wizard to upload photos and generate AI listings
-- **Mortgage Calculator** (`/mortgage-calculator`) — Calculate payments with live rates and full amortization
-- **Scenario Comparison** (`/scenarios`) — Compare up to 3 loan options side-by-side
-- **Login** — Secure email/password authentication via Supabase
+**2. Backend API** (FastAPI)
+- REST endpoints for scenario calculations, mortgage analysis, AI listings
+- Supabase integration for authentication and lead persistence
+- Async-first design for concurrent external API calls
 
-**For comprehensive architecture documentation**, see **[FRONTEND.md](./FRONTEND.md)** which covers:
-- Detailed folder structure and component organization
-- API layer design (auth, listings, rates)
-- State management patterns using React hooks
-- Mortgage calculation library
-- Development workflow (adding pages, components, API calls)
-- Deployment and performance optimization strategies
+**3. Frontend** (React + Vite)
+- SPA for homeowners to input their situation and view recommendations
+- Professional dashboard for tracking generated leads
+- Real-time scenario comparison with live mortgage rates
 
----
-
-## Backend Architecture
-
-The saveero backend is a **FastAPI-based Python service** that powers the core AI listing generation, property management, and authentication workflows.
-
-**Key highlights:**
-- **Async-first design** — Concurrent API calls to OpenRouter, Supabase, and other services
-- **Secure authentication** — Supabase JWT with ES256 validation, no runtime JWKS fetches
-- **Row-level security** — Multi-tenant data isolation enforced at the database level
-- **Image analysis pipeline** — Vision models + LLM orchestration for photo → MLS listing
-- **Intelligent caching** — Disk-based image cache prevents re-analyzing the same photos
-
-**Main API endpoints:**
-- **POST /api/listings/generate** — Upload photos, receive AI-generated listing with pricing and comps
-- **POST /api/listings/save** — Persist listing to database
-- **GET /api/listings** — List all user properties
-- **GET /api/listings/{id}** — Get single property with comparables
-- **GET /api/health** — Health check
-
-**External integrations:**
-- **OpenRouter** — Vision (Gemini 2.5-Flash) and LLM models (Claude Sonnet, Perplexity)
-- **Supabase** — PostgreSQL database + JWT authentication
-- **FRED API** — Live mortgage rates (integrated on frontend)
-
-**Tech stack:**
-- FastAPI + Python 3.11
-- Supabase (PostgreSQL + Auth)
-- OpenRouter (multimodal AI)
-- LangChain + asyncio for concurrent processing
-- Render.com for hosting
-
-**For comprehensive architecture documentation**, see **[BACKEND.md](./BACKEND.md)** which covers:
-- Detailed system architecture and data flow
-- Complete folder structure and file purposes
-- All API endpoints with request/response examples
-- Database schema and row-level security policies
-- JWT authentication and authorization
-- External service integrations (OpenRouter, Supabase, FRED)
-- AI listing generation workflow (7-step pipeline)
-- Error handling, security, and performance considerations
-- Local development setup and testing
-- Deployment instructions for Render.com
-- Troubleshooting guide and future improvements
+**For developers:** Start with **[CLAUDE.md](./CLAUDE.md)** for commands and architecture overview. Then see:
+- **[SCENARIOS.md](./SCENARIOS.md)** — Complete scenario engine documentation (formulas, logic, examples)
+- **[BACKEND.md](./BACKEND.md)** — FastAPI architecture and API endpoints
+- **[FRONTEND.md](./FRONTEND.md)** — React SPA structure and components
 
 ### Quick Start
 
+**Backend:**
+```bash
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with Supabase and OpenRouter keys
+python3 -m uvicorn main:app --reload
+# API available at http://localhost:8000/docs
+```
+
+**Frontend:**
 ```bash
 cd webapp
 npm install
-
-# Copy and fill .env with Supabase and FRED API keys
 cp .env.example .env
-
-# Start dev server (opens at http://localhost:5173)
+# Edit .env with Supabase and FRED API keys
 npm run dev
+# App available at http://localhost:5173
 ```
 
-### Folder Structure
+**Tests:**
+```bash
+pytest                                    # Run all tests
+pytest tests/test_scenarios_golden.py -v # Run scenario engine tests
+cd webapp && npm test                     # Run frontend tests
+```
+
+### Project Structure
 
 ```
-webapp/src/
-├── pages/          # Route-level components (Login, Dashboard, ListProperty, etc.)
-├── components/ui/  # Reusable UI primitives (Button, Card, Input, etc.)
-├── api/            # HTTP clients (auth.ts, listingApi.ts, ratesApi.ts)
-└── lib/            # Utilities (mortgage.ts, utils.ts)
+saveero/
+├── scenarios/              # Core scenario engine (pure Python, stateless)
+│   ├── inputs.py          # Input validation
+│   ├── stay.py, refinance.py, sell_buy.py, rent.py, rent_out_buy.py
+│   ├── decision_map.py     # Rankings and recommendations
+│   ├── engine.py           # Orchestrator
+│   ├── audit.py            # Calculation trail
+│   ├── schemas.py          # Pydantic HTTP models
+│   └── core.py             # Shared utilities (amortization, tax, etc.)
+├── api/
+│   ├── scenario_routes.py  # POST /api/scenarios/* endpoints
+│   ├── mortgage_routes.py  # Mortgage calculator endpoints
+│   └── listing_wizard_routes.py  # AI listing endpoints
+├── core/                   # Config, auth, database clients
+├── mortgage/               # Mortgage analysis utilities
+├── db/                     # Schema migrations
+├── tests/                  # pytest test suite
+├── webapp/                 # React frontend (Vite)
+├── main.py                 # FastAPI entry point
+├── CLAUDE.md               # Developer guide
+├── SCENARIOS.md            # Scenario engine documentation
+├── BACKEND.md              # Backend architecture
+└── FRONTEND.md             # Frontend architecture
 ```
 
 ---
