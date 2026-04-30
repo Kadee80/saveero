@@ -148,7 +148,14 @@ function Hero() {
   useSplitWordsIn(headingRef, { trigger: 'mount', stagger: 0.05, delay: 0.15 })
 
   return (
-    <section className="relative overflow-hidden">
+    <section
+      className="relative overflow-hidden"
+      // Soft dusty-blue glow from the top — reads as "sky" against the
+      // cream chrome without becoming a colored sheet.
+      style={{
+        background: `radial-gradient(ellipse 120% 70% at 50% 0%, ${SCENARIO_PALETTE.blue}14 0%, transparent 70%)`,
+      }}
+    >
       <div
         ref={ref}
         className="mx-auto grid max-w-6xl gap-12 px-6 py-20 md:grid-cols-2 md:items-center md:py-28"
@@ -234,7 +241,15 @@ function FiveScenarios() {
   useStaggerInOnScroll(gridRef, '[data-fade]')
 
   return (
-    <section className="border-y border-border/60 bg-secondary/40 py-20 md:py-24">
+    <section
+      className="py-20 md:py-24"
+      // Sage tint flowing down — picks up the eyebrow color and lets
+      // the section feel like a continuation of the hero rather than a
+      // hard-edged box.
+      style={{
+        background: `linear-gradient(180deg, ${SCENARIO_PALETTE.emerald}14 0%, ${SCENARIO_PALETTE.emerald}05 100%)`,
+      }}
+    >
       <div className="mx-auto max-w-6xl px-6">
         <div ref={headerRef} className="mx-auto max-w-2xl text-center">
           <p
@@ -336,7 +351,14 @@ function HowItWorks() {
   useStaggerInOnScroll(gridRef, '[data-fade]')
 
   return (
-    <section className="py-20 md:py-24">
+    <section
+      className="py-20 md:py-24"
+      // Plum wash that intensifies toward the bottom of the section —
+      // hands the eye off into the partners block below.
+      style={{
+        background: `linear-gradient(180deg, transparent 0%, ${SCENARIO_PALETTE.violet}10 100%)`,
+      }}
+    >
       <div className="mx-auto max-w-6xl px-6">
         <div ref={headerRef} className="mx-auto max-w-2xl text-center">
           <p
@@ -390,8 +412,12 @@ function ForPartners() {
 
   return (
     <section
-      className="border-y border-border/60 py-20 md:py-24"
-      style={{ backgroundColor: `${SCENARIO_PALETTE.emerald}0d` }}
+      className="py-20 md:py-24"
+      // Deeper sage gradient, top-loaded so the partner copy reads as
+      // a clear context shift from the homeowner sections above.
+      style={{
+        background: `linear-gradient(180deg, ${SCENARIO_PALETTE.emerald}1f 0%, ${SCENARIO_PALETTE.emerald}08 100%)`,
+      }}
     >
       <div className="mx-auto max-w-6xl px-6">
         <div ref={ref} className="grid gap-12 md:grid-cols-2 md:items-center">
@@ -489,7 +515,14 @@ function ClosingCta() {
   useSplitWordsIn(headingRef)
 
   return (
-    <section className="py-20 md:py-28">
+    <section
+      className="py-20 md:py-28"
+      // Centered terracotta glow — warmest part of the page, which
+      // sits well behind the closing "ready to start" pitch.
+      style={{
+        background: `radial-gradient(ellipse 80% 60% at 50% 50%, ${SCENARIO_PALETTE.rose}14 0%, transparent 70%)`,
+      }}
+    >
       <div ref={ref} className="mx-auto max-w-3xl px-6 text-center">
         <h2
           ref={headingRef}
