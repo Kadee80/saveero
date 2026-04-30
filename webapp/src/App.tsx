@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { Suspense, lazy, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Home, Calculator, GitCompare, Compass, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
@@ -10,7 +10,11 @@ import MortgageCalculator from './pages/MortgageCalculator'
 import ScenarioComparison from './pages/ScenarioComparison'
 import DecisionMap from './pages/DecisionMap'
 import Login from './pages/Login'
-import Landing from './pages/Landing'
+
+// Lazy-load Landing so gsap + ScrollTrigger + SplitText (~50kb gzipped)
+// stay out of the authed app bundle. Landing is only ever rendered when
+// session === null, so signed-in users never need this code.
+const Landing = lazy(() => import('./pages/Landing'))
 
 const navItems = [
   { to: '/',                    label: 'Dashboard',     icon: LayoutDashboard },
@@ -57,15 +61,20 @@ export default function App() {
   // code (e.g. a copy issue, or running a closed-beta period).
   if (session === null) {
     const landingEnabled = import.meta.env.VITE_LANDING_ENABLED !== 'false'
+    // Suspense fallback is just the cream background — Landing's chunk is
+    // small enough to typically resolve in well under a second, and a
+    // blank cream pane reads as "loading" without flashing heavy chrome.
     return (
-      <Routes>
-        {landingEnabled && <Route path="/" element={<Landing />} />}
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="*"
-          element={landingEnabled ? <Navigate to="/login" replace /> : <Login />}
-        />
-      </Routes>
+      <Suspense fallback={<div className="min-h-screen bg-background" />}>
+        <Routes>
+          {landingEnabled && <Route path="/" element={<Landing />} />}
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="*"
+            element={landingEnabled ? <Navigate to="/login" replace /> : <Login />}
+          />
+        </Routes>
+      </Suspense>
     )
   }
 
