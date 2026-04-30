@@ -44,6 +44,7 @@ import {
   useFadeInOnMount,
   useFadeInOnScroll,
   useStaggerInOnScroll,
+  useSplitWordsIn,
 } from '@/hooks/useGsapFadeIn'
 
 // ---------------------------------------------------------------------------
@@ -138,9 +139,13 @@ function TopNav() {
 
 function Hero() {
   // Fade the hero copy/illustration in on mount — it's already in view,
-  // so a scroll trigger would never fire.
+  // so a scroll trigger would never fire. The H1 gets a separate per-word
+  // stagger on top so the marquee headline reads as "crisping into place"
+  // rather than just "fading in."
   const ref = useRef<HTMLDivElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
   useFadeInOnMount(ref)
+  useSplitWordsIn(headingRef, { trigger: 'mount', stagger: 0.05, delay: 0.15 })
 
   return (
     <section className="relative overflow-hidden">
@@ -159,7 +164,10 @@ function Hero() {
             <Sparkles className="h-3 w-3" />
             For your biggest financial decision
           </div>
-          <h1 className="text-4xl font-bold tracking-tight text-foreground md:text-5xl lg:text-6xl">
+          <h1
+            ref={headingRef}
+            className="text-4xl font-bold tracking-tight text-foreground md:text-5xl lg:text-6xl"
+          >
             Make your next home move with{' '}
             <span style={{ color: SCENARIO_PALETTE.blue }}>confidence.</span>
           </h1>
@@ -216,9 +224,13 @@ function Hero() {
 function FiveScenarios() {
   // Header fades up as the section enters viewport. Cards stagger in
   // separately so the eye lands on the heading first, then the grid.
+  // The H2 gets its own per-word stagger layered on top of the block
+  // fade — same pattern as the hero.
   const headerRef = useRef<HTMLDivElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   useFadeInOnScroll(headerRef)
+  useSplitWordsIn(headingRef)
   useStaggerInOnScroll(gridRef, '[data-fade]')
 
   return (
@@ -231,7 +243,10 @@ function FiveScenarios() {
           >
             The five paths
           </p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">
+          <h2
+            ref={headingRef}
+            className="mt-3 text-3xl font-bold tracking-tight md:text-4xl"
+          >
             Every door in front of you, modeled the same way.
           </h2>
           <p className="mt-4 text-lg text-stone-600">
@@ -314,8 +329,10 @@ function HowItWorks() {
     },
   ]
   const headerRef = useRef<HTMLDivElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   useFadeInOnScroll(headerRef)
+  useSplitWordsIn(headingRef)
   useStaggerInOnScroll(gridRef, '[data-fade]')
 
   return (
@@ -328,7 +345,10 @@ function HowItWorks() {
           >
             How it works
           </p>
-          <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">
+          <h2
+            ref={headingRef}
+            className="mt-3 text-3xl font-bold tracking-tight md:text-4xl"
+          >
             Three steps from "should I move?" to "here's why."
           </h2>
         </div>
@@ -364,7 +384,9 @@ function HowItWorks() {
 
 function ForPartners() {
   const ref = useRef<HTMLDivElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
   useFadeInOnScroll(ref)
+  useSplitWordsIn(headingRef)
 
   return (
     <section
@@ -380,7 +402,10 @@ function ForPartners() {
             >
               For partners
             </p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">
+            <h2
+              ref={headingRef}
+              className="mt-3 text-3xl font-bold tracking-tight md:text-4xl"
+            >
               Working with homeowners on big moves?
             </h2>
             <p className="mt-4 text-lg text-stone-600">
@@ -459,12 +484,17 @@ function ForPartners() {
 
 function ClosingCta() {
   const ref = useRef<HTMLDivElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
   useFadeInOnScroll(ref)
+  useSplitWordsIn(headingRef)
 
   return (
     <section className="py-20 md:py-28">
       <div ref={ref} className="mx-auto max-w-3xl px-6 text-center">
-        <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
+        <h2
+          ref={headingRef}
+          className="text-3xl font-bold tracking-tight md:text-4xl"
+        >
           Ready to map your next move?
         </h2>
         <p className="mt-4 text-lg text-stone-600">
