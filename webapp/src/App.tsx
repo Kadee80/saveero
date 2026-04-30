@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link, Route, Routes, useLocation } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Home, Calculator, GitCompare, Compass, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import { cn } from '@/lib/utils'
@@ -10,6 +10,7 @@ import MortgageCalculator from './pages/MortgageCalculator'
 import ScenarioComparison from './pages/ScenarioComparison'
 import DecisionMap from './pages/DecisionMap'
 import Login from './pages/Login'
+import Landing from './pages/Landing'
 
 const navItems = [
   { to: '/',                    label: 'Dashboard',     icon: LayoutDashboard },
@@ -44,9 +45,18 @@ export default function App() {
     )
   }
 
-  // Not logged in — show auth page
+  // Not logged in — public surface: marketing landing at /, auth at /login.
+  // Any other path (including bookmarked deep links to authed pages) sends
+  // the visitor to /login so they land somewhere actionable instead of a
+  // 404, then the deep link can be re-followed once they sign in.
   if (session === null) {
-    return <Login />
+    return (
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    )
   }
 
   // Logged in — show the full app

@@ -27,6 +27,7 @@
  * <Login />
  */
 import React, { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { signIn, signUp } from '@/api/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,7 +46,12 @@ type Mode = 'signin' | 'signup'
  * @returns {JSX.Element} Themed login form
  */
 export default function Login() {
-  const [mode, setMode]       = useState<Mode>('signin')
+  // The landing page's "Get started" / "Try it free" CTAs link to
+  // /login?mode=signup so the form opens already on the signup tab.
+  // Direct visits to /login still default to signin.
+  const [searchParams] = useSearchParams()
+  const initialMode: Mode = searchParams.get('mode') === 'signup' ? 'signup' : 'signin'
+  const [mode, setMode]       = useState<Mode>(initialMode)
   const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]     = useState<string | null>(null)
