@@ -49,12 +49,22 @@ export default function App() {
   // Any other path (including bookmarked deep links to authed pages) sends
   // the visitor to /login so they land somewhere actionable instead of a
   // 404, then the deep link can be re-followed once they sign in.
+  //
+  // Feature flag: VITE_LANDING_ENABLED. Defaults to enabled. Set to "false"
+  // (e.g. in Vercel env vars) to fall back to the old behavior of dropping
+  // every unauthenticated visitor straight onto the Login form. Useful if
+  // we need to temporarily pull the public marketing page without reverting
+  // code (e.g. a copy issue, or running a closed-beta period).
   if (session === null) {
+    const landingEnabled = import.meta.env.VITE_LANDING_ENABLED !== 'false'
     return (
       <Routes>
-        <Route path="/" element={<Landing />} />
+        {landingEnabled && <Route path="/" element={<Landing />} />}
         <Route path="/login" element={<Login />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route
+          path="*"
+          element={landingEnabled ? <Navigate to="/login" replace /> : <Login />}
+        />
       </Routes>
     )
   }
