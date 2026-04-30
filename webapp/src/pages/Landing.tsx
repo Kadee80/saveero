@@ -122,7 +122,12 @@ function TopNav() {
           >
             Sign in
           </Link>
-          <Button asChild size="sm" style={{ backgroundColor: SCENARIO_PALETTE.blue }}>
+          <Button
+            asChild
+            size="sm"
+            className="shadow-md transition-shadow hover:shadow-lg"
+            style={{ backgroundColor: SCENARIO_PALETTE.blue }}
+          >
             <Link to="/login?mode=signup">Get started</Link>
           </Button>
         </div>
@@ -149,7 +154,7 @@ function Hero() {
 
   return (
     <section
-      className="relative overflow-hidden"
+      className="relative overflow-hidden border-b border-border/60"
       // Dusty-blue glow from the top — reads as "sky" against the
       // cream chrome.
       style={{
@@ -187,7 +192,7 @@ function Hero() {
             <Button
               asChild
               size="lg"
-              className="text-base"
+              className="text-base shadow-lg transition-shadow hover:shadow-xl"
               style={{ backgroundColor: SCENARIO_PALETTE.blue }}
             >
               <Link to="/login?mode=signup">
@@ -206,7 +211,7 @@ function Hero() {
         {/* Hero illustration — full PNG, no crop. */}
         <div className="relative">
           <div
-            className="aspect-square w-full overflow-hidden rounded-2xl shadow-sm ring-1 ring-border"
+            className="aspect-square w-full overflow-hidden rounded-2xl shadow-lg ring-1 ring-border"
             style={{ backgroundColor: `${SCENARIO_PALETTE.blue}10` }}
           >
             <img
@@ -242,7 +247,7 @@ function FiveScenarios() {
 
   return (
     <section
-      className="py-20 md:py-24"
+      className="border-b border-border/60 py-20 md:py-24"
       // Sage wash flowing down — picks up the eyebrow color and lets
       // the section feel like a continuation of the hero rather than a
       // hard-edged box.
@@ -281,7 +286,7 @@ function FiveScenarios() {
               <div
                 key={s.scene}
                 data-fade
-                className="group overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border transition-shadow hover:shadow-md"
+                className="group overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border transition-shadow hover:shadow-xl"
               >
                 <div
                   className="aspect-[16/10] overflow-hidden"
@@ -352,7 +357,7 @@ function HowItWorks() {
 
   return (
     <section
-      className="py-20 md:py-24"
+      className="border-b border-border/60 py-20 md:py-24"
       // Plum wash that intensifies toward the bottom of the section —
       // hands the eye off into the partners block below.
       style={{
@@ -379,7 +384,7 @@ function HowItWorks() {
             <div
               key={s.n}
               data-fade
-              className="rounded-xl border border-border bg-card p-6"
+              className="rounded-xl border border-border bg-card p-6 shadow-md transition-shadow hover:shadow-lg"
             >
               <div
                 className="text-sm font-bold tabular-nums"
@@ -412,7 +417,7 @@ function ForPartners() {
 
   return (
     <section
-      className="py-20 md:py-24"
+      className="border-b border-border/60 py-20 md:py-24"
       // Deeper sage gradient, top-loaded so the partner copy reads as
       // a clear context shift from the homeowner sections above.
       style={{
@@ -476,6 +481,7 @@ function ForPartners() {
               <Button
                 asChild
                 size="lg"
+                className="shadow-lg transition-shadow hover:shadow-xl"
                 style={{ backgroundColor: SCENARIO_PALETTE.emerald }}
               >
                 <Link to="/login?mode=signup">
@@ -486,7 +492,7 @@ function ForPartners() {
           </div>
           <div className="relative">
             <div
-              className="aspect-square w-full overflow-hidden rounded-2xl shadow-sm ring-1 ring-border"
+              className="aspect-square w-full overflow-hidden rounded-2xl shadow-lg ring-1 ring-border"
               style={{ backgroundColor: `${SCENARIO_PALETTE.emerald}14` }}
             >
               <img
@@ -516,7 +522,7 @@ function ClosingCta() {
 
   return (
     <section
-      className="py-20 md:py-28"
+      className="border-b border-border/60 py-20 md:py-28"
       // Centered terracotta glow — warmest part of the page, which
       // sits well behind the closing "ready to start" pitch.
       style={{
@@ -538,7 +544,7 @@ function ClosingCta() {
           <Button
             asChild
             size="lg"
-            className="text-base"
+            className="text-base shadow-lg transition-shadow hover:shadow-xl"
             style={{ backgroundColor: SCENARIO_PALETTE.rose }}
           >
             <Link to="/login?mode=signup">
