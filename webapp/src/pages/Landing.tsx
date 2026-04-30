@@ -23,6 +23,7 @@
  *
  * @module pages/Landing
  */
+import { useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Compass,
@@ -39,6 +40,11 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SCENARIO_PALETTE } from '@/lib/chartPalette'
+import {
+  useFadeInOnMount,
+  useFadeInOnScroll,
+  useStaggerInOnScroll,
+} from '@/hooks/useGsapFadeIn'
 
 // ---------------------------------------------------------------------------
 // Scenario card metadata — same five scenarios the product compares,
@@ -131,9 +137,17 @@ function TopNav() {
 // ---------------------------------------------------------------------------
 
 function Hero() {
+  // Fade the hero copy/illustration in on mount — it's already in view,
+  // so a scroll trigger would never fire.
+  const ref = useRef<HTMLDivElement>(null)
+  useFadeInOnMount(ref)
+
   return (
     <section className="relative overflow-hidden">
-      <div className="mx-auto grid max-w-6xl gap-12 px-6 py-20 md:grid-cols-2 md:items-center md:py-28">
+      <div
+        ref={ref}
+        className="mx-auto grid max-w-6xl gap-12 px-6 py-20 md:grid-cols-2 md:items-center md:py-28"
+      >
         <div>
           <div
             className="mb-5 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium"
@@ -200,10 +214,17 @@ function Hero() {
 // ---------------------------------------------------------------------------
 
 function FiveScenarios() {
+  // Header fades up as the section enters viewport. Cards stagger in
+  // separately so the eye lands on the heading first, then the grid.
+  const headerRef = useRef<HTMLDivElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+  useFadeInOnScroll(headerRef)
+  useStaggerInOnScroll(gridRef, '[data-fade]')
+
   return (
     <section className="border-y border-border/60 bg-secondary/40 py-20 md:py-24">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="mx-auto max-w-2xl text-center">
+        <div ref={headerRef} className="mx-auto max-w-2xl text-center">
           <p
             className="text-sm font-semibold uppercase tracking-wide"
             style={{ color: SCENARIO_PALETTE.emerald }}
@@ -220,12 +241,16 @@ function FiveScenarios() {
           </p>
         </div>
 
-        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          ref={gridRef}
+          className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {SCENARIOS.map((s) => {
             const Icon = s.icon
             return (
               <div
                 key={s.scene}
+                data-fade
                 className="group overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border transition-shadow hover:shadow-md"
               >
                 <div
@@ -288,10 +313,15 @@ function HowItWorks() {
       color: SCENARIO_PALETTE.rose,
     },
   ]
+  const headerRef = useRef<HTMLDivElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+  useFadeInOnScroll(headerRef)
+  useStaggerInOnScroll(gridRef, '[data-fade]')
+
   return (
     <section className="py-20 md:py-24">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="mx-auto max-w-2xl text-center">
+        <div ref={headerRef} className="mx-auto max-w-2xl text-center">
           <p
             className="text-sm font-semibold uppercase tracking-wide"
             style={{ color: SCENARIO_PALETTE.violet }}
@@ -302,9 +332,13 @@ function HowItWorks() {
             Three steps from "should I move?" to "here's why."
           </h2>
         </div>
-        <div className="mt-14 grid gap-8 md:grid-cols-3">
+        <div ref={gridRef} className="mt-14 grid gap-8 md:grid-cols-3">
           {steps.map((s) => (
-            <div key={s.n} className="rounded-xl border border-border bg-card p-6">
+            <div
+              key={s.n}
+              data-fade
+              className="rounded-xl border border-border bg-card p-6"
+            >
               <div
                 className="text-sm font-bold tabular-nums"
                 style={{ color: s.color }}
@@ -329,13 +363,16 @@ function HowItWorks() {
 // ---------------------------------------------------------------------------
 
 function ForPartners() {
+  const ref = useRef<HTMLDivElement>(null)
+  useFadeInOnScroll(ref)
+
   return (
     <section
       className="border-y border-border/60 py-20 md:py-24"
       style={{ backgroundColor: `${SCENARIO_PALETTE.emerald}0d` }}
     >
       <div className="mx-auto max-w-6xl px-6">
-        <div className="grid gap-12 md:grid-cols-2 md:items-center">
+        <div ref={ref} className="grid gap-12 md:grid-cols-2 md:items-center">
           <div>
             <p
               className="text-sm font-semibold uppercase tracking-wide"
@@ -421,9 +458,12 @@ function ForPartners() {
 // ---------------------------------------------------------------------------
 
 function ClosingCta() {
+  const ref = useRef<HTMLDivElement>(null)
+  useFadeInOnScroll(ref)
+
   return (
     <section className="py-20 md:py-28">
-      <div className="mx-auto max-w-3xl px-6 text-center">
+      <div ref={ref} className="mx-auto max-w-3xl px-6 text-center">
         <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
           Ready to map your next move?
         </h2>
