@@ -279,23 +279,24 @@ function FiveScenarios() {
 
         <div
           ref={gridRef}
-          className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+          className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-6"
         >
           {SCENARIOS.map((s, i) => {
             const Icon = s.icon
-            // We have 5 cards in a 3-col lg grid: row 1 = items 0/1/2,
-            // row 2 = items 3/4 + an empty slot. Pushing the 4th card
-            // (i === 3) to col-start-2 on lg leaves col 1 empty so the
-            // last two cards center across cols 2 and 3 of the second
-            // row. On smaller breakpoints the natural left-pack reads
-            // fine, so we only override at lg.
+            // 5 cards in a 6-col lg grid where each card spans 2 cols:
+            //   row 1: cards 0/1/2 -> cols 1-2, 3-4, 5-6 (full row)
+            //   row 2: cards 3/4   -> cols 2-3, 4-5 (centered, col 1
+            //                         and col 6 empty in equal measure)
+            // Pushing card 3 to col-start-2 leaves the leftover space
+            // split evenly on both sides of the pair = truly centered.
+            // On sm/md the cards left-pack naturally — no override.
             const orphanCenter = i === 3 ? 'lg:col-start-2' : ''
             return (
               <div
                 key={s.scene}
                 data-fade
                 className={cn(
-                  'group overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border transition-shadow hover:shadow-xl',
+                  'group overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border transition-shadow hover:shadow-xl lg:col-span-2',
                   orphanCenter,
                 )}
               >
