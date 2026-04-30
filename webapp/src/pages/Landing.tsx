@@ -39,6 +39,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { SCENARIO_PALETTE } from '@/lib/chartPalette'
 import {
   useFadeInOnMount,
@@ -280,13 +281,23 @@ function FiveScenarios() {
           ref={gridRef}
           className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
         >
-          {SCENARIOS.map((s) => {
+          {SCENARIOS.map((s, i) => {
             const Icon = s.icon
+            // We have 5 cards in a 3-col lg grid: row 1 = items 0/1/2,
+            // row 2 = items 3/4 + an empty slot. Pushing the 4th card
+            // (i === 3) to col-start-2 on lg leaves col 1 empty so the
+            // last two cards center across cols 2 and 3 of the second
+            // row. On smaller breakpoints the natural left-pack reads
+            // fine, so we only override at lg.
+            const orphanCenter = i === 3 ? 'lg:col-start-2' : ''
             return (
               <div
                 key={s.scene}
                 data-fade
-                className="group overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border transition-shadow hover:shadow-xl"
+                className={cn(
+                  'group overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border transition-shadow hover:shadow-xl',
+                  orphanCenter,
+                )}
               >
                 <div
                   className="aspect-[16/10] overflow-hidden"
