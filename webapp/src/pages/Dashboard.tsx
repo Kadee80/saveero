@@ -86,7 +86,7 @@ function HeroTool() {
           style={{ backgroundColor: `${SCENARIO_PALETTE.blue}10` }}
         >
           <img
-            src="/illustrations/stay.png"
+            src="/illustrations/decision.png"
             alt=""
             aria-hidden="true"
             loading="eager"
