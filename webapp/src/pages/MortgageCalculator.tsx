@@ -27,6 +27,7 @@
  * <MortgageCalculator />
  */
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import {
   RefreshCw,
@@ -49,6 +50,7 @@ import { Badge } from '@/components/ui/badge';
 import type { AmortizationRow } from '@/lib/mortgage';
 import {
   analyzeMortgage as analyzeMortgageApi,
+  getAnalysis,
   saveAnalysis,
   type AnalyzeMortgageResponse,
 } from '@/api/mortgageApi';
@@ -288,7 +290,7 @@ export default function MortgageCalculator() {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormValues>({
     defaultValues: {
       purchasePrice: 450000,
       downPayment: 90000,
@@ -299,6 +301,55 @@ export default function MortgageCalculator() {
       monthlyHoa: 0,
     },
   });
+
+  // ?analysis=<id> deep-link from the dashboard's "Recent calculations"
+  // panel: fetch the saved analysis and reset the form to its inputs so the
+  // user picks up exactly where they left off. Errors are swallowed
+  // silently — if the load fails, the form keeps its defaults rather than
+  // throwing the user into a broken state mid-session.
+  const [searchParams] = useSearchParams();
+  const analysisId = searchParams.get('analysis');
+  useEffect(() => {
+    if (!analysisId) return;
+    let cancelled = false;
+    getAnalysis(analysisId)
+      .then((row) => {
+        if (cancelled) return;
+        const i = row.inputs as Record<string, unknown>;
+        // Defensive: every saved row from the calculator's saveAnalysis call
+        // ships the same shape (snake_case keys, numeric values), but we
+        // tolerate missing fields by falling back to the form's existing
+        // value rather than NaN-ing it out.
+        reset({
+          purchasePrice: typeof i.purchase_price === 'number' ? i.purchase_price : 450000,
+          downPayment: typeof i.down_payment === 'number' ? i.down_payment : 90000,
+          annualRatePercent:
+            typeof i.annual_rate_percent === 'number' ? i.annual_rate_percent : 6.82,
+          // termYears is a discriminated string union — coerce, then
+          // defensively fall back to '30' if the saved value isn't one of
+          // the three allowed terms.
+          termYears: ((): '15' | '20' | '30' => {
+            const t = String(i.term_years ?? '30');
+            return t === '15' || t === '20' || t === '30' ? t : '30';
+          })(),
+          annualPropertyTaxPercent:
+            typeof i.annual_property_tax_percent === 'number'
+              ? i.annual_property_tax_percent
+              : 1.2,
+          annualInsuranceDollars:
+            typeof i.annual_insurance_dollars === 'number'
+              ? i.annual_insurance_dollars
+              : 1500,
+          monthlyHoa: typeof i.monthly_hoa === 'number' ? i.monthly_hoa : 0,
+        });
+      })
+      .catch(() => {
+        /* fall back to default form values silently */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [analysisId, reset]);
 
   // Auto-recalculate whenever any field changes — now via the backend engine.
   // A tiny debounce keeps us from firing a request on every keystroke.

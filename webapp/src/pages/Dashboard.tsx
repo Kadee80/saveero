@@ -21,11 +21,14 @@ import { Link } from 'react-router-dom'
 import {
   ArrowRight,
   Calculator,
+  Clock,
   Compass,
   GitCompare,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getUser } from '@/api/auth'
+import { listAnalyses, type SavedAnalysisSummary } from '@/api/mortgageApi'
+import { formatCurrency } from '@/lib/utils'
 import { SCENARIO_PALETTE } from '@/lib/chartPalette'
 
 export default function Dashboard() {
@@ -40,6 +43,7 @@ export default function Dashboard() {
       <Greeting email={userEmail} />
       <HeroTool />
       <SecondaryTools />
+      <RecentCalculations />
     </div>
   )
 }
@@ -204,5 +208,153 @@ function SecondaryTools() {
         blurb="Stack up to three financing scenarios — different down payments, terms, or rates — and pick the winner."
       />
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Recent calculations panel — proof-of-concept "your saved work" surface.
+//
+// Phase 1 (this commit): renders saved Mortgage Calculator analyses only,
+// using the existing /api/mortgage/analyses list endpoint. No new backend.
+// Phase 2 (deferred): extend to Compare Scenarios and Decision Map saves
+// once those tools have persistence wired up.
+//
+// Each card click re-opens the calculator with that analysis's inputs
+// prefilled via the ?analysis=<id> query param (handled in
+// MortgageCalculator.tsx).
+// ---------------------------------------------------------------------------
+
+function RecentCalculations() {
+  const [items, setItems] = useState<SavedAnalysisSummary[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    listAnalyses()
+      .then((rows) =>
+        // Server already returns most-recent-first, but be defensive in case
+        // it doesn't. Cap to 5 — a quick-resume panel, not a history page.
+        setItems(
+          [...rows]
+            .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
+            .slice(0, 5),
+        ),
+      )
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Could not load saved work'
+        // 401 = not signed in (shouldn't happen here, but be safe) — show
+        // empty state instead of an error banner.
+        if (msg.includes('401')) {
+          setItems([])
+          return
+        }
+        setError(msg)
+      })
+  }, [])
+
+  return (
+    <section>
+      <div className="flex items-end justify-between">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Recent calculations</h2>
+          <p className="mt-1 text-sm text-stone-600">
+            Pick up where you left off. Saved analyses from the Mortgage Calculator.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        {items === null && !error && (
+          <p className="py-8 text-center text-sm text-stone-500">Loading…</p>
+        )}
+
+        {error && (
+          <p className="py-8 text-center text-sm" style={{ color: '#b85844' }}>
+            {error}
+          </p>
+        )}
+
+        {items !== null && items.length === 0 && !error && (
+          <RecentEmptyState />
+        )}
+
+        {items !== null && items.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((a) => (
+              <SavedAnalysisCard key={a.id} a={a} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function RecentEmptyState() {
+  return (
+    <div className="rounded-xl border border-dashed border-border bg-card/50 px-6 py-10 text-center">
+      <p className="text-sm font-medium">Nothing saved yet.</p>
+      <p className="mt-1 text-sm text-stone-600">
+        Run a calculation in the Mortgage Calculator and hit{' '}
+        <span className="font-medium">Save</span> to see it here.
+      </p>
+      <Button
+        asChild
+        variant="outline"
+        size="sm"
+        className="mt-4"
+      >
+        <Link to="/mortgage-calculator">
+          Open Mortgage Calculator <ArrowRight className="ml-1 h-3.5 w-3.5" />
+        </Link>
+      </Button>
+    </div>
+  )
+}
+
+function SavedAnalysisCard({ a }: { a: SavedAnalysisSummary }) {
+  // Compact "saved N ago" — same pattern as the old listings dashboard.
+  const ago = (() => {
+    const days = Math.floor((Date.now() - +new Date(a.created_at)) / 86_400_000)
+    if (days === 0) return 'today'
+    if (days === 1) return 'yesterday'
+    if (days < 7) return `${days}d ago`
+    return new Date(a.created_at).toLocaleDateString()
+  })()
+
+  // Plain-English inputs summary. Fall back to label if we don't have
+  // enough structured fields (older saves predating this column set).
+  const inputsLine =
+    a.purchase_price != null && a.term_years != null && a.annual_rate_percent != null
+      ? `${formatCurrency(a.purchase_price)} · ${a.term_years}yr @ ${a.annual_rate_percent}%`
+      : a.label ?? 'Mortgage analysis'
+
+  return (
+    <Link
+      to={`/mortgage-calculator?analysis=${encodeURIComponent(a.id)}`}
+      className="group block rounded-lg bg-card p-4 shadow-sm ring-1 ring-border transition-shadow hover:shadow-md"
+    >
+      <div className="flex items-center gap-2">
+        <Calculator
+          className="h-4 w-4"
+          style={{ color: SCENARIO_PALETTE.violet }}
+        />
+        <span
+          className="text-xs font-semibold uppercase tracking-wide"
+          style={{ color: SCENARIO_PALETTE.violet }}
+        >
+          Mortgage
+        </span>
+      </div>
+      {a.monthly_total != null && (
+        <p className="mt-2 text-xl font-bold tabular-nums">
+          {formatCurrency(a.monthly_total)}
+          <span className="ml-1 text-sm font-normal text-stone-500">/mo</span>
+        </p>
+      )}
+      <p className="mt-1 text-sm text-stone-600">{inputsLine}</p>
+      <p className="mt-3 flex items-center gap-1 text-xs text-stone-500">
+        <Clock className="h-3 w-3" /> Saved {ago}
+      </p>
+    </Link>
   )
 }
