@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Home, Calculator, GitCompare, Compass, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
+import { Home as HomeIcon, House, Calculator, GitCompare, Compass, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import { cn } from '@/lib/utils'
 import { supabase, signOut } from '@/api/auth'
@@ -16,12 +16,20 @@ import Login from './pages/Login'
 // session === null, so signed-in users never need this code.
 const Landing = lazy(() => import('./pages/Landing'))
 
-const navItems = [
-  { to: '/',                    label: 'Dashboard',     icon: LayoutDashboard },
-  { to: '/list-property',       label: 'List Property', icon: Home },
-  { to: '/mortgage-calculator', label: 'Mortgage',       icon: Calculator },
-  { to: '/scenarios',           label: 'Compare',        icon: GitCompare },
-  { to: '/decision-map',        label: 'Decision Map',   icon: Compass },
+// Sidebar nav, grouped: mortgage tools first (the product focus), then a
+// divider, then the property-listing creator (kept reachable but clearly
+// secondary). The empty `divider: true` entry renders a thin border-t row
+// instead of a link.
+const navItems: Array<
+  | { divider: true }
+  | { to: string; label: string; icon: typeof HomeIcon }
+> = [
+  { to: '/',                    label: 'Home',         icon: HomeIcon },
+  { to: '/decision-map',        label: 'Decision Map', icon: Compass },
+  { to: '/mortgage-calculator', label: 'Mortgage',     icon: Calculator },
+  { to: '/scenarios',           label: 'Compare',      icon: GitCompare },
+  { divider: true },
+  { to: '/list-property',       label: 'List Property', icon: House },
 ]
 
 export default function App() {
@@ -98,7 +106,17 @@ export default function App() {
 
         {/* Nav */}
         <nav className="flex-1 py-4 space-y-1 px-2">
-          {navItems.map(({ to, label, icon: Icon }) => {
+          {navItems.map((item, idx) => {
+            if ('divider' in item) {
+              return (
+                <div
+                  key={`divider-${idx}`}
+                  className="my-2 mx-3 border-t border-stone-700"
+                  aria-hidden="true"
+                />
+              )
+            }
+            const { to, label, icon: Icon } = item
             const active = pathname === to
             return (
               <Link

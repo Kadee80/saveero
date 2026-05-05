@@ -1,233 +1,208 @@
 /**
- * Dashboard page component - displays all saved property listings for the current user
+ * Dashboard — the logged-in homepage.
  *
- * Features:
- * - Shows summary statistics (total, active, draft listings)
- * - Displays each listing with key properties (address, price, beds, baths, created date)
- * - Color-coded status badges (draft/published/active)
- * - Links to view/edit individual listings
- * - Handles loading and error states gracefully
- * - Gracefully handles unauthenticated state (shows empty state, not error)
+ * Used to be a listings table. Repositioned post-demo as a tool hub
+ * that puts the mortgage analyzer features front and center: a
+ * personalized greeting, a hero card for Decision Map (the marquee
+ * surface), and two secondary tiles for the Mortgage Calculator and
+ * Scenario Comparison utilities. The listings creator is still
+ * reachable via the sidebar, just demoted.
  *
- * Data flow:
- * - Fetches user email and listing data on mount via listingApi
- * - Displays loading state during initial fetch
- * - Shows error banner only for non-401 errors (401 = not logged in = normal)
- * - Empty state prompts user to create first listing
+ * Visual language matches the public Landing page — same warm
+ * cream/sage/dusty-blue/terracotta palette, same illustration set,
+ * same shadow + border treatment — so the user feels like they've
+ * crossed into "the app" without the brand changing on them.
  *
  * @component
- * @returns {JSX.Element} The dashboard page with listing table
- *
- * @example
- * <Dashboard />
+ * @returns {JSX.Element} The dashboard hub
  */
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Home, Plus, Bed, Bath, DollarSign, Clock, ArrowRight } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  ArrowRight,
+  Calculator,
+  Compass,
+  GitCompare,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { formatCurrency } from '@/lib/utils'
-import { listingApi, type SavedListing } from '@/api/listingApi'
 import { getUser } from '@/api/auth'
+import { SCENARIO_PALETTE } from '@/lib/chartPalette'
 
-/**
- * Formats an ISO datetime string as a human-readable relative time string
- *
- * @param {string} iso - ISO 8601 datetime string
- * @returns {string} Relative time (e.g., "Today", "Yesterday", "3 days ago", or formatted date)
- *
- * @example
- * timeAgo('2026-04-15T10:30:00Z') // Returns "Today"
- * timeAgo('2026-04-14T10:30:00Z') // Returns "Yesterday"
- * timeAgo('2026-04-10T10:30:00Z') // Returns "5 days ago"
- */
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const days = Math.floor(diff / 86400000)
-  if (days === 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  if (days < 7) return `${days} days ago`
-  return new Date(iso).toLocaleDateString()
-}
-
-/**
- * Status badge component - displays listing status with color coding
- *
- * Maps status values to styled badges:
- * - draft: slate (gray) - not yet published
- * - published: blue - listing is live
- * - active: green - actively being marketed
- *
- * @param {Object} props - Component props
- * @param {string} props.status - Listing status value (draft/published/active or custom)
- * @returns {JSX.Element} Styled status badge
- *
- * @example
- * <StatusBadge status="active" />  // Returns green "active" badge
- * <StatusBadge status="draft" />   // Returns gray "draft" badge
- */
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    draft:     'bg-stone-100 text-stone-600',
-    published: 'bg-blue-100 text-blue-700',
-    active:    'bg-green-100 text-green-700',
-  }
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] ?? styles.draft}`}>
-      {status}
-    </span>
-  )
-}
-
-/**
- * Dashboard component - displays all saved listings for the current user
- *
- * Features:
- * - Shows summary statistics (total, active, draft listings)
- * - Displays each listing with key properties (address, price, beds, baths, created date)
- * - Color-coded status badges (draft/published/active)
- * - Links to view/edit individual listings
- * - Handles loading and error states gracefully
- * - Gracefully handles unauthenticated state (shows empty state, not error)
- *
- * Data flow:
- * - Fetches user email and listing data on mount via listingApi
- * - Displays loading state during initial fetch
- * - Shows error banner only for non-401 errors (401 = not logged in = normal)
- * - Empty state prompts user to create first listing
- *
- * @component
- * @returns {JSX.Element} The dashboard page with listing table
- *
- * @example
- * <Dashboard />
- */
 export default function Dashboard() {
-  const [listings, setListings]   = useState<SavedListing[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
-    getUser().then(u => setUserEmail(u?.email ?? null))
-
-    listingApi.list()
-      .then(setListings)
-      .catch(err => {
-        // 401 means not logged in yet — show empty state, not an error banner
-        if (!err.message?.includes('401')) setError(err.message)
-      })
-      .finally(() => setLoading(false))
+    getUser().then((u) => setUserEmail(u?.email ?? null))
   }, [])
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          {userEmail && (
-            <p className="mt-1 text-sm text-muted-foreground">{userEmail}</p>
-          )}
+    <div className="mx-auto max-w-6xl space-y-10 p-6 md:py-10">
+      <Greeting email={userEmail} />
+      <HeroTool />
+      <SecondaryTools />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Greeting — friendly header. Email shown subtly underneath so the user
+// can confirm which account they're in without it dominating the surface.
+// ---------------------------------------------------------------------------
+
+function Greeting({ email }: { email: string | null }) {
+  return (
+    <header>
+      <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
+        Welcome back.
+      </h1>
+      <p className="mt-2 text-lg text-stone-600">
+        What would you like to model today?
+      </p>
+      {email && (
+        <p className="mt-1 text-xs text-stone-500">{email}</p>
+      )}
+    </header>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Hero tool card — Decision Map gets the marquee position. Full-bleed
+// illustration on the left (lg) or top (sm), copy + CTA on the right.
+// Mirrors the scenario-card layout from DecisionMap itself for visual
+// continuity once you click through.
+// ---------------------------------------------------------------------------
+
+function HeroTool() {
+  return (
+    <Link
+      to="/decision-map"
+      className="group block overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border transition-shadow hover:shadow-xl"
+      style={{ borderTopColor: SCENARIO_PALETTE.blue, borderTopWidth: 4 }}
+    >
+      <div className="flex flex-col md:flex-row">
+        {/* Illustration */}
+        <div
+          className="aspect-[16/10] w-full overflow-hidden md:aspect-auto md:w-2/5"
+          style={{ backgroundColor: `${SCENARIO_PALETTE.blue}10` }}
+        >
+          <img
+            src="/illustrations/stay.png"
+            alt=""
+            aria-hidden="true"
+            loading="eager"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+          />
         </div>
-        <Button asChild>
-          <Link to="/list-property">
-            <Plus className="mr-2 h-4 w-4" /> New Listing
-          </Link>
-        </Button>
+        {/* Copy */}
+        <div className="flex-1 p-6 md:p-10">
+          <div className="flex items-center gap-2">
+            <Compass
+              className="h-5 w-5"
+              style={{ color: SCENARIO_PALETTE.blue }}
+            />
+            <span
+              className="text-sm font-semibold uppercase tracking-wide"
+              style={{ color: SCENARIO_PALETTE.blue }}
+            >
+              Marquee tool
+            </span>
+          </div>
+          <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">
+            Decision Map
+          </h2>
+          <p className="mt-3 max-w-xl text-stone-600">
+            Model all five paths — stay, refinance, sell &amp; buy, rent, rent
+            out &amp; buy — side by side. The fastest way to see whether the
+            move you're considering actually pays off.
+          </p>
+          <div className="mt-6">
+            <Button
+              size="lg"
+              className="shadow-lg transition-shadow group-hover:shadow-xl"
+              style={{ backgroundColor: SCENARIO_PALETTE.blue }}
+              tabIndex={-1}
+            >
+              Open Decision Map <ArrowRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
+    </Link>
+  )
+}
 
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Total listings', value: listings.length },
-          { label: 'Active',         value: listings.filter(l => l.status === 'active').length },
-          { label: 'Drafts',         value: listings.filter(l => l.status === 'draft').length },
-        ].map(stat => (
-          <Card key={stat.label}>
-            <CardContent className="pt-4">
-              <p className="text-2xl font-bold">{stat.value}</p>
-              <p className="text-sm text-muted-foreground">{stat.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+// ---------------------------------------------------------------------------
+// Secondary tool cards — Mortgage Calculator and Scenario Comparison.
+// Icon-led rather than illustrated, so they read as utilities sitting
+// alongside the marquee tool rather than competing with it.
+// ---------------------------------------------------------------------------
+
+interface SecondaryCardProps {
+  to: string
+  icon: typeof Calculator
+  color: string
+  eyebrow: string
+  title: string
+  blurb: string
+}
+
+function SecondaryCard({
+  to,
+  icon: Icon,
+  color,
+  eyebrow,
+  title,
+  blurb,
+}: SecondaryCardProps) {
+  return (
+    <Link
+      to={to}
+      className="group block rounded-xl bg-card p-6 shadow-md ring-1 ring-border transition-shadow hover:shadow-lg"
+      style={{ borderTopColor: color, borderTopWidth: 4 }}
+    >
+      <div
+        className="inline-flex rounded-lg p-2.5"
+        style={{ backgroundColor: `${color}1a` }}
+      >
+        <Icon className="h-5 w-5" style={{ color }} />
       </div>
+      <p
+        className="mt-4 text-xs font-semibold uppercase tracking-wide"
+        style={{ color }}
+      >
+        {eyebrow}
+      </p>
+      <h3 className="mt-1 text-lg font-semibold tracking-tight">{title}</h3>
+      <p className="mt-2 text-sm text-stone-600">{blurb}</p>
+      <p
+        className="mt-4 inline-flex items-center gap-1 text-sm font-medium transition-transform group-hover:translate-x-0.5"
+        style={{ color }}
+      >
+        Open <ArrowRight className="h-4 w-4" />
+      </p>
+    </Link>
+  )
+}
 
-      {/* Listings table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Your Listings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading && (
-            <p className="py-12 text-center text-sm text-muted-foreground">Loading…</p>
-          )}
-
-          {!loading && error && (
-            <p className="py-12 text-center text-sm text-red-500">{error}</p>
-          )}
-
-          {!loading && !error && listings.length === 0 && (
-            <div className="flex flex-col items-center gap-4 py-16 text-center">
-              <div className="rounded-full bg-stone-100 p-4">
-                <Home className="h-8 w-8 text-stone-400" />
-              </div>
-              <div>
-                <p className="font-medium">No listings yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Upload photos and let the AI generate your first listing.
-                </p>
-              </div>
-              <Button asChild variant="outline">
-                <Link to="/list-property">
-                  <Plus className="mr-2 h-4 w-4" /> Create your first listing
-                </Link>
-              </Button>
-            </div>
-          )}
-
-          {!loading && listings.length > 0 && (
-            <div className="divide-y">
-              {listings.map(listing => (
-                <div key={listing.id} className="flex items-center justify-between py-4">
-                  <div className="space-y-1">
-                    <p className="font-medium leading-tight">{listing.address}</p>
-                    <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                      {listing.price_mid && (
-                        <span className="flex items-center gap-1">
-                          <DollarSign className="h-3.5 w-3.5" />
-                          {formatCurrency(listing.price_mid)}
-                        </span>
-                      )}
-                      {listing.beds && (
-                        <span className="flex items-center gap-1">
-                          <Bed className="h-3.5 w-3.5" /> {listing.beds} bd
-                        </span>
-                      )}
-                      {listing.baths && (
-                        <span className="flex items-center gap-1">
-                          <Bath className="h-3.5 w-3.5" /> {listing.baths} ba
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> {timeAgo(listing.created_at)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <StatusBadge status={listing.status} />
-                    <Button variant="ghost" size="icon" asChild>
-                      <Link to={`/listings/${listing.id}`}>
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+function SecondaryTools() {
+  return (
+    <div className="grid gap-6 md:grid-cols-2">
+      <SecondaryCard
+        to="/mortgage-calculator"
+        icon={Calculator}
+        color={SCENARIO_PALETTE.violet}
+        eyebrow="Quick math"
+        title="Mortgage Calculator"
+        blurb="Single-scenario monthly payment, total cost, and amortization. Live rates from the Fed."
+      />
+      <SecondaryCard
+        to="/scenarios"
+        icon={GitCompare}
+        color={SCENARIO_PALETTE.emerald}
+        eyebrow="Side-by-side"
+        title="Compare Scenarios"
+        blurb="Stack up to three financing scenarios — different down payments, terms, or rates — and pick the winner."
+      />
     </div>
   )
 }
