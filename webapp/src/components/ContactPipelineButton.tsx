@@ -14,6 +14,7 @@
 import { Briefcase, Landmark, MapPin, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { trackActivity, updateMyLead } from '@/api/leadsApi'
 
 export type Pipeline = 'financial-planner' | 'real-estate-agent' | 'mortgage-broker'
 
@@ -66,9 +67,21 @@ export function ContactPipelineButton({
       size={size}
       className={cn('transition-colors', config.hoverClass, className)}
       onClick={() => {
-        // Placeholder — wire up to lead-capture endpoint later.
-        // Tracking the click here keeps the surface area minimal for now.
-        console.info(`[lead] contact requested: ${pipeline}`)
+        // Two-fold CRM update, both fire-and-forget so the click feels
+        // instant:
+        //   1) Append a 'clicked_contact_<pipeline>' activity entry. The
+        //      backend's status ladder bumps the lead to 'engaged' on any
+        //      kind starting with 'clicked_contact_'.
+        //   2) Patch the lead's `pipeline` field so the CRM Kanban can
+        //      show which partner specialty the user is interested in.
+        //      Hyphenated form preserved as the stored value; the
+        //      activity kind uses underscores to match our event-naming
+        //      convention.
+        const kind = `clicked_contact_${pipeline.replace(/-/g, '_')}`
+        trackActivity(kind, { pipeline })
+        updateMyLead({ pipeline }).catch((err) => {
+          console.warn('[lead] pipeline update failed:', err)
+        })
       }}
     >
       <Icon className="h-4 w-4" />

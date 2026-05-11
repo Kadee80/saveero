@@ -45,6 +45,7 @@ import {
   CHART_NEGATIVE,
   TOOLTIP_STYLE,
 } from '@/lib/chartPalette';
+import { trackActivity } from '@/api/leadsApi';
 import {
   BarChart,
   Bar,
@@ -264,6 +265,14 @@ export default function ScenarioComparison() {
   // Fetch rates on mount
   useEffect(() => {
     loadRates();
+  }, []);
+
+  // CRM activity event — fires once per mount. Comparison math is
+  // client-side so there's no natural "run" trigger; opening the page
+  // is the closest meaningful signal that the user engaged with the
+  // tool. Status bumps to at least 'active' via the 'ran_' prefix.
+  useEffect(() => {
+    trackActivity('ran_compare_scenarios');
   }, []);
 
   /**

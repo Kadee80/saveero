@@ -69,6 +69,7 @@ import {
   CHART_SERIES,
   TOOLTIP_STYLE,
 } from '@/lib/chartPalette'
+import { trackActivity } from '@/api/leadsApi'
 
 // ---------------------------------------------------------------------------
 // Scenario colors and metadata
@@ -689,6 +690,12 @@ export default function DecisionMap() {
       const inputs = fromFormShape(formState)
       const r = await runAll(inputs)
       setResult(r)
+      // CRM activity event — fires only on a successful run so failed
+      // runs (network blip, validation error, etc.) don't pollute the
+      // lead's timeline. Status ladder bumps user to at least 'active'.
+      trackActivity('ran_decision_map', {
+        purchase_price: inputs.current_home_value,
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to run scenario engine')
     } finally {

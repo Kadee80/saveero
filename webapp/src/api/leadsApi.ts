@@ -134,6 +134,22 @@ export async function updateMyLead(body: UpdateLeadRequest): Promise<Lead> {
   return res.json()
 }
 
+/**
+ * Fire-and-forget wrapper around appendActivity. Callers that just want
+ * to log a user action without caring about the response should use this
+ * — it swallows network failures and never throws, so a flaky CRM call
+ * can never block the workflow it's tagging along on.
+ *
+ * Example:
+ *   trackActivity('ran_decision_map')
+ *   trackActivity('clicked_contact_financial_planner', { from: 'recommendation' })
+ */
+export function trackActivity(kind: string, data?: Record<string, unknown>): void {
+  appendActivity({ kind, data }).catch((err) => {
+    console.warn(`[lead] activity '${kind}' failed:`, err)
+  })
+}
+
 /** Append one event to the activity_log. Status auto-bumps per backend rules. */
 export async function appendActivity(body: AppendActivityRequest): Promise<Lead> {
   const auth = await authHeader()

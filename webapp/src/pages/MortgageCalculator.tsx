@@ -56,6 +56,7 @@ import {
 } from '@/api/mortgageApi';
 import { fetchCurrentRates, type CurrentRates } from '@/api/ratesApi';
 import { SCENARIO_PALETTE, CHART_NEGATIVE } from '@/lib/chartPalette';
+import { trackActivity } from '@/api/leadsApi';
 
 /**
  * UI-shaped mortgage summary. Mirrors the camelCase shape the original
@@ -431,6 +432,13 @@ export default function MortgageCalculator() {
       });
       setSaveState('saved');
       setSaveMessage('Saved to your analyses');
+      // CRM activity event — only on successful save so failed saves
+      // don't pollute the timeline. Status ladder bumps to 'active'.
+      trackActivity('saved_mortgage_analysis', {
+        purchase_price: Number(watchedValues.purchasePrice),
+        term_years: Number(watchedValues.termYears),
+        rate: Number(watchedValues.annualRatePercent),
+      });
     } catch (err) {
       setSaveState('error');
       setSaveMessage(err instanceof Error ? err.message : 'Save failed');
