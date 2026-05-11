@@ -240,6 +240,13 @@ export default function App() {
               <Route path="/mortgage-calculator" element={<MortgageCalculator />} />
               <Route path="/scenarios"           element={<ScenarioComparison />} />
               <Route path="/decision-map"        element={<DecisionMap />} />
+              {/* Catch-all — sends the user to the dashboard if they
+                  land on an unauthed-only path (most commonly /login
+                  after the session is established) or a stale
+                  bookmark. Without this, signing in while at /login
+                  renders an empty main pane and Dashboard never
+                  mounts, which silently skips the onboarding wizard. */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </div>
