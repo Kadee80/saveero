@@ -27,16 +27,111 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getUser } from '@/api/auth'
+import { getMyLead, type Lead } from '@/api/leadsApi'
 import { listAnalyses, type SavedAnalysisSummary } from '@/api/mortgageApi'
 import { formatCurrency } from '@/lib/utils'
 import { SCENARIO_PALETTE } from '@/lib/chartPalette'
+import OnboardingWizard from '@/pages/OnboardingWizard'
+
+/**
+ * Possible states of the initial lead fetch.
+ *
+ *   loading  — first request (or one-shot retry) in flight; show a
+ *              minimal placeholder so the hub doesn't flash before the
+ *              wizard.
+ *   wizard   — lead loaded and role/intent are still 'unknown'; render
+ *              the OnboardingWizard inline instead of the hub.
+ *   ready    — lead loaded with real role/intent OR we gave up after
+ *              the retry and decided to render the hub anyway.
+ */
+type LeadGate =
+  | { kind: 'loading' }
+  | { kind: 'wizard'; lead: Lead }
+  | { kind: 'ready' }
 
 export default function Dashboard() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [gate, setGate] = useState<LeadGate>({ kind: 'loading' })
 
   useEffect(() => {
     getUser().then((u) => setUserEmail(u?.email ?? null))
   }, [])
+
+  // Initial lead fetch — decides whether to render the onboarding
+  // wizard or the hub. App.tsx is supposed to seed the lead row at
+  // signup, but if that hasn't completed yet we get a 404; we retry
+  // once after a short delay before giving up and rendering the hub
+  // (so we don't block the user on a CRM-only failure).
+  useEffect(() => {
+    let cancelled = false
+
+    function applyLead(lead: Lead) {
+      if (cancelled) return
+      if (lead.role === 'unknown' || lead.intent === 'unknown') {
+        setGate({ kind: 'wizard', lead })
+      } else {
+        setGate({ kind: 'ready' })
+      }
+    }
+
+    async function load() {
+      try {
+        const lead = await getMyLead()
+        applyLead(lead)
+      } catch {
+        // One-shot retry — the row may still be mid-seed from App.tsx.
+        setTimeout(async () => {
+          if (cancelled) return
+          try {
+            const lead = await getMyLead()
+            applyLead(lead)
+          } catch {
+            // CRM read failed twice — don't block the product. Render
+            // the hub and let the user get on with what they came for.
+            if (!cancelled) setGate({ kind: 'ready' })
+          }
+        }, 600)
+      }
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Refetch after the wizard PUTs role/intent — once we see real
+  // values the gate flips to 'ready' and the hub renders.
+  async function handleWizardComplete() {
+    try {
+      const lead = await getMyLead()
+      if (lead.role === 'unknown' || lead.intent === 'unknown') {
+        // Belt + suspenders: if for some reason the PUT didn't stick
+        // (race with another tab clearing it, etc.) leave the wizard
+        // up rather than dumping the user back into it with no
+        // explanation.
+        setGate({ kind: 'wizard', lead })
+      } else {
+        setGate({ kind: 'ready' })
+      }
+    } catch {
+      // PUT succeeded but the refetch failed — assume the values are
+      // good and let the user into the hub.
+      setGate({ kind: 'ready' })
+    }
+  }
+
+  if (gate.kind === 'loading') {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center bg-background">
+        <p className="text-sm text-stone-500">Loading…</p>
+      </div>
+    )
+  }
+
+  if (gate.kind === 'wizard') {
+    return <OnboardingWizard onComplete={handleWizardComplete} />
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-10 p-6 md:py-10">

@@ -1,10 +1,10 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { Home as HomeIcon, House, Calculator, GitCompare, Compass, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
+import { Home as HomeIcon, House, Calculator, GitCompare, Compass, Inbox, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import { cn } from '@/lib/utils'
 import { supabase, signOut } from '@/api/auth'
-import { createLead } from '@/api/leadsApi'
+import { createLead, listAllLeads } from '@/api/leadsApi'
 import Dashboard from './pages/Dashboard'
 import ListProperty from './pages/ListProperty'
 import MortgageCalculator from './pages/MortgageCalculator'
@@ -17,25 +17,46 @@ import Login from './pages/Login'
 // session === null, so signed-in users never need this code.
 const Landing = lazy(() => import('./pages/Landing'))
 
+// Lazy-load AdminCRM the same way — admin-only surface, no point bloating
+// the main bundle for the 99% of users who never see it.
+const AdminCRM = lazy(() => import('./pages/AdminCRM'))
+
+type NavItem =
+  | { divider: true }
+  | { to: string; label: string; icon: typeof HomeIcon }
+
 // Sidebar nav, grouped: mortgage tools first (the product focus), then a
 // divider, then the property-listing creator (kept reachable but clearly
 // secondary). The empty `divider: true` entry renders a thin border-t row
 // instead of a link.
-const navItems: Array<
-  | { divider: true }
-  | { to: string; label: string; icon: typeof HomeIcon }
-> = [
-  { to: '/',                    label: 'Home',         icon: HomeIcon },
-  { to: '/decision-map',        label: 'Decision Map', icon: Compass },
-  { to: '/mortgage-calculator', label: 'Mortgage',     icon: Calculator },
-  { to: '/scenarios',           label: 'Compare',      icon: GitCompare },
-  { divider: true },
-  { to: '/list-property',       label: 'List Property', icon: House },
-]
+//
+// CRM ("/admin/crm") is injected dynamically at the end of the first
+// group only for admin users — see buildNavItems below.
+function buildNavItems(isAdmin: boolean): NavItem[] {
+  const primary: NavItem[] = [
+    { to: '/',                    label: 'Home',         icon: HomeIcon    },
+    { to: '/decision-map',        label: 'Decision Map', icon: Compass     },
+    { to: '/mortgage-calculator', label: 'Mortgage',     icon: Calculator  },
+    { to: '/scenarios',           label: 'Compare',      icon: GitCompare  },
+  ]
+  if (isAdmin) {
+    primary.push({ to: '/admin/crm', label: 'CRM', icon: Inbox })
+  }
+  return [
+    ...primary,
+    { divider: true },
+    { to: '/list-property', label: 'List Property', icon: House },
+  ]
+}
 
 export default function App() {
   const [session, setSession]   = useState<Session | null | undefined>(undefined) // undefined = loading
   const [collapsed, setCollapsed] = useState(false)
+  // Admin detection — non-blocking. Probe GET /api/leads (admin-only) once
+  // per signed-in session; if it succeeds the user is admin and we expose
+  // the CRM nav link. Failure (403, network) leaves isAdmin false. The
+  // app never waits on this probe — the link just appears late.
+  const [isAdmin, setIsAdmin] = useState(false)
   const { pathname } = useLocation()
 
   useEffect(() => {
@@ -63,6 +84,27 @@ export default function App() {
     createLead(name ? { name } : {}).catch((err) => {
       console.warn('[lead] seed failed:', err)
     })
+  }, [session?.user.id])
+
+  // Admin probe — runs once per signed-in session. Cheap GET that 403s
+  // for non-admins. We swallow all errors so a flaky network never hides
+  // the CRM link in a way that requires a hard reload to recover from.
+  useEffect(() => {
+    if (!session) {
+      setIsAdmin(false)
+      return
+    }
+    let cancelled = false
+    listAllLeads()
+      .then(() => {
+        if (!cancelled) setIsAdmin(true)
+      })
+      .catch(() => {
+        if (!cancelled) setIsAdmin(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [session?.user.id])
 
   // Still checking session — show nothing to avoid flash
@@ -123,7 +165,7 @@ export default function App() {
 
         {/* Nav */}
         <nav className="flex-1 py-4 space-y-1 px-2">
-          {navItems.map((item, idx) => {
+          {buildNavItems(isAdmin).map((item, idx) => {
             if ('divider' in item) {
               return (
                 <div
@@ -190,13 +232,16 @@ export default function App() {
         )}
       >
         <div className="p-6">
-          <Routes>
-            <Route path="/"                    element={<Dashboard />} />
-            <Route path="/list-property"       element={<ListProperty />} />
-            <Route path="/mortgage-calculator" element={<MortgageCalculator />} />
-            <Route path="/scenarios"           element={<ScenarioComparison />} />
-            <Route path="/decision-map"        element={<DecisionMap />} />
-          </Routes>
+          <Suspense fallback={<div className="min-h-[40vh]" />}>
+            <Routes>
+              <Route path="/admin/crm"           element={<AdminCRM />} />
+              <Route path="/"                    element={<Dashboard />} />
+              <Route path="/list-property"       element={<ListProperty />} />
+              <Route path="/mortgage-calculator" element={<MortgageCalculator />} />
+              <Route path="/scenarios"           element={<ScenarioComparison />} />
+              <Route path="/decision-map"        element={<DecisionMap />} />
+            </Routes>
+          </Suspense>
         </div>
         <footer className="text-center text-xs text-muted-foreground py-4">
           Saveero © {new Date().getFullYear()}
