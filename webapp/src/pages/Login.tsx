@@ -54,6 +54,9 @@ export default function Login() {
   const [mode, setMode]       = useState<Mode>(initialMode)
   const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
+  // Name is captured at signup so the CRM has something to display for
+  // the lead row from day one. Signin doesn't use it.
+  const [name, setName]       = useState('')
   const [error, setError]     = useState<string | null>(null)
   const [info, setInfo]       = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -85,7 +88,15 @@ export default function Login() {
         if (error) setError(error.message)
         // On success, App.tsx's onAuthStateChange fires and shows the app
       } else {
-        const { error } = await signUp(email, password)
+        // Pass `name` through Supabase user metadata so it survives the
+        // email-confirmation round-trip. App.tsx reads it back on the
+        // first authenticated session and creates the CRM lead row.
+        const trimmedName = name.trim()
+        const { error } = await signUp(
+          email,
+          password,
+          trimmedName ? { name: trimmedName } : undefined,
+        )
         if (error) {
           setError(error.message)
         } else {
@@ -130,6 +141,24 @@ export default function Login() {
               {info && (
                 <div className="rounded-md bg-emerald-900/40 border border-emerald-700 px-3 py-2 text-sm text-emerald-300">
                   {info}
+                </div>
+              )}
+
+              {/* Name — signup only. Stored on auth.users.raw_user_meta_data
+                  via signUp options.data; seeds the CRM lead row on first
+                  authenticated session. */}
+              {mode === 'signup' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="name" className="text-stone-300">Your name</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    autoComplete="name"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Jane Doe"
+                    className="bg-stone-800 border-stone-700 text-white placeholder:text-stone-500 focus:border-stone-500"
+                  />
                 </div>
               )}
 

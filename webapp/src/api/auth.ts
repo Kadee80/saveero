@@ -81,8 +81,20 @@ export async function signIn(email: string, password: string) {
  * if (error) console.error(error.message)
  * else console.log('Signup successful - check email for confirmation')
  */
-export async function signUp(email: string, password: string) {
-  return supabase.auth.signUp({ email, password });
+export async function signUp(
+  email: string,
+  password: string,
+  metadata?: { name?: string },
+) {
+  // Supabase stores `options.data` on auth.users.raw_user_meta_data, which
+  // survives the email-confirmation round-trip. We read this back from
+  // session.user.user_metadata on the first authenticated session and
+  // seed the CRM `leads` row from it (see App.tsx).
+  return supabase.auth.signUp({
+    email,
+    password,
+    options: metadata ? { data: metadata } : undefined,
+  });
 }
 
 /**

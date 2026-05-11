@@ -4,6 +4,7 @@ import { Home as HomeIcon, House, Calculator, GitCompare, Compass, ChevronLeft, 
 import type { Session } from '@supabase/supabase-js'
 import { cn } from '@/lib/utils'
 import { supabase, signOut } from '@/api/auth'
+import { createLead } from '@/api/leadsApi'
 import Dashboard from './pages/Dashboard'
 import ListProperty from './pages/ListProperty'
 import MortgageCalculator from './pages/MortgageCalculator'
@@ -47,6 +48,22 @@ export default function App() {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  // CRM lead seeding — fires once per session whenever we cross from
+  // signed-out to signed-in. The signup form stashes `name` on the auth
+  // user's metadata; we read it back here on the first authenticated
+  // session and create the corresponding `leads` row. POST /api/leads is
+  // idempotent, so re-firing on subsequent sessions is safe (it just
+  // returns the existing row). Failure is logged but doesn't block the
+  // app — the CRM seed is a nice-to-have, not a gate.
+  useEffect(() => {
+    if (!session) return
+    const name =
+      (session.user.user_metadata as { name?: string } | null)?.name
+    createLead(name ? { name } : {}).catch((err) => {
+      console.warn('[lead] seed failed:', err)
+    })
+  }, [session?.user.id])
 
   // Still checking session — show nothing to avoid flash
   if (session === undefined) {

@@ -20,6 +20,7 @@ from core.config import settings
 from api.listing_wizard_routes import router as wizard_router
 from api.mortgage_routes import router as mortgage_router
 from api.scenario_routes import router as scenario_router
+from api.lead_routes import router as lead_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ app.add_middleware(
 app.include_router(wizard_router, prefix="/api")
 app.include_router(mortgage_router, prefix="/api")
 app.include_router(scenario_router, prefix="/api")
+app.include_router(lead_router, prefix="/api")
 
 # Future modules — uncomment as they ship:
 # from api.property_routes   import router as property_router
