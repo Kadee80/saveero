@@ -165,6 +165,41 @@ export async function appendActivity(body: AppendActivityRequest): Promise<Lead>
   return res.json()
 }
 
+/** Admin patch payload — used by AdminCRM's LeadDrawer status editor. */
+export interface AdminPatchLeadRequest {
+  status?: LeadStatus
+  /** Optional free-text note attached to the activity_log entry. */
+  note?: string
+  name?: string
+  role?: LeadRole
+  intent?: LeadIntent
+  pipeline?: string
+}
+
+/**
+ * Admin-only — patch any field on any lead. Used by the CRM drawer to
+ * mark leads `converted`/`lost`, fix captured names, etc. Status moves
+ * bypass the user-side forward-only ladder so admins can correct
+ * misclassifications (e.g. roll a 'converted' back to 'engaged' if a
+ * deal falls through). Returns the updated lead row.
+ */
+export async function adminUpdateLead(
+  leadId: string,
+  body: AdminPatchLeadRequest,
+): Promise<Lead> {
+  const auth = await authHeader()
+  if (!auth) throw new Error('Not signed in')
+  const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: auth },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new Error((await safeError(res)) || `admin update failed (${res.status})`)
+  }
+  return res.json()
+}
+
 /** Admin-only — full list for the CRM dashboard. Non-admins get 403. */
 export async function listAllLeads(): Promise<Lead[]> {
   const auth = await authHeader()

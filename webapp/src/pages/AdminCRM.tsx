@@ -20,9 +20,10 @@
  * @component
  * @returns {JSX.Element} The admin CRM dashboard
  */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { UserPlus, X } from 'lucide-react'
 import {
+  adminUpdateLead,
   listAllLeads,
   type ActivityLogEntry,
   type Lead,
@@ -30,6 +31,7 @@ import {
   type LeadRole,
   type LeadStatus,
 } from '@/api/leadsApi'
+import { Button } from '@/components/ui/button'
 import { SCENARIO_PALETTE } from '@/lib/chartPalette'
 import { cn } from '@/lib/utils'
 
@@ -38,6 +40,8 @@ import { cn } from '@/lib/utils'
 // natural language instead of database internals.
 // ---------------------------------------------------------------------------
 
+// Live funnel — the four statuses a lead progresses through as the user
+// engages with the product. Rendered as the primary 4-column Kanban.
 const STATUS_COLUMNS: ReadonlyArray<{
   status: LeadStatus
   label: string
@@ -48,6 +52,28 @@ const STATUS_COLUMNS: ReadonlyArray<{
   { status: 'active',   label: 'Active',   color: SCENARIO_PALETTE.emerald },
   { status: 'engaged',  label: 'Engaged',  color: SCENARIO_PALETTE.rose    },
 ]
+
+// Resolved states — terminal, only reachable via admin action. Rendered
+// as a secondary 2-column row beneath the main Kanban so the funnel
+// stays visually distinct from "deals already booked or set aside."
+const RESOLVED_COLUMNS: ReadonlyArray<{
+  status: LeadStatus
+  label: string
+  color: string
+}> = [
+  { status: 'converted', label: 'Converted', color: SCENARIO_PALETTE.amber },
+  { status: 'lost',      label: 'Lost',      color: '#78716c'              }, // warm stone-500
+]
+
+const ALL_COLUMNS = [...STATUS_COLUMNS, ...RESOLVED_COLUMNS]
+
+const STATUS_LABEL: Record<LeadStatus, string> = Object.fromEntries(
+  ALL_COLUMNS.map((c) => [c.status, c.label]),
+) as Record<LeadStatus, string>
+
+const STATUS_COLOR: Record<LeadStatus, string> = Object.fromEntries(
+  ALL_COLUMNS.map((c) => [c.status, c.color]),
+) as Record<LeadStatus, string>
 
 const ROLE_LABEL: Record<LeadRole, string> = {
   homeowner: 'Homeowner',
@@ -95,15 +121,13 @@ export default function AdminCRM() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [selected, setSelected] = useState<Lead | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
+  // Pulled out as a callback so the LeadDrawer's status editor can
+  // trigger a refresh after a successful patch without re-mounting the
+  // whole page or duplicating the fetch logic.
+  const refresh = useCallback(() => {
     listAllLeads()
-      .then((rows) => {
-        if (cancelled) return
-        setLeads(rows)
-      })
+      .then((rows) => setLeads(rows))
       .catch((err: unknown) => {
-        if (cancelled) return
         const msg = err instanceof Error ? err.message : String(err)
         // Backend wraps errors as "list leads failed (403)" etc. — sniff
         // for the status code rather than relying on response objects.
@@ -114,10 +138,11 @@ export default function AdminCRM() {
           setErrorMsg(msg)
         }
       })
-    return () => {
-      cancelled = true
-    }
   }, [])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
 
   // Close drawer with Escape.
   useEffect(() => {
@@ -199,7 +224,22 @@ export default function AdminCRM() {
     `${counts.enriched} enriched`,
     `${counts.active} active`,
     `${counts.engaged} engaged`,
+    `${counts.converted} converted`,
+    `${counts.lost} lost`,
   ]
+
+  // After the drawer successfully patches a lead, the backend hands us
+  // the new row. We splice it into the leads list in place so the
+  // Kanban reflects the new status without a full network round-trip,
+  // and re-point `selected` at the fresh object so the drawer's own
+  // body re-renders against the updated lead (new status, new activity
+  // entry from the admin action, etc.).
+  function handleAfterUpdate(updated: Lead) {
+    setLeads((prev) =>
+      prev ? prev.map((l) => (l.id === updated.id ? updated : l)) : prev,
+    )
+    setSelected(updated)
+  }
 
   return (
     <>
@@ -211,6 +251,7 @@ export default function AdminCRM() {
           </p>
         </header>
 
+        {/* Live funnel — the four active statuses. */}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {STATUS_COLUMNS.map(({ status, label, color }) => {
             const columnLeads = leads.filter((l) => l.status === status)
@@ -225,10 +266,41 @@ export default function AdminCRM() {
             )
           })}
         </div>
+
+        {/* Resolved row — terminal states reached only via admin action.
+            Visually separated by a horizontal rule + smaller eyebrow so
+            it reads as "history" rather than part of the active funnel. */}
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+              Resolved
+            </span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {RESOLVED_COLUMNS.map(({ status, label, color }) => {
+              const columnLeads = leads.filter((l) => l.status === status)
+              return (
+                <KanbanColumn
+                  key={status}
+                  label={label}
+                  color={color}
+                  leads={columnLeads}
+                  onSelect={setSelected}
+                />
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {selected && (
-        <LeadDrawer lead={selected} onClose={() => setSelected(null)} />
+        <LeadDrawer
+          lead={selected}
+          onClose={() => setSelected(null)}
+          onUpdate={handleAfterUpdate}
+        />
       )}
     </>
   )
@@ -380,12 +452,14 @@ function PipelineChip({ pipeline }: { pipeline: string }) {
 interface LeadDrawerProps {
   lead: Lead
   onClose: () => void
+  /** Called with the updated lead after a successful admin patch. */
+  onUpdate: (updated: Lead) => void
 }
 
-function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
-  const accentColor =
-    STATUS_COLUMNS.find((c) => c.status === lead.status)?.color ??
-    SCENARIO_PALETTE.violet
+function LeadDrawer({ lead, onClose, onUpdate }: LeadDrawerProps) {
+  // Resolve color from the unified label/color maps so this works for
+  // both the live-funnel statuses and the resolved ones.
+  const accentColor = STATUS_COLOR[lead.status] ?? SCENARIO_PALETTE.violet
 
   // Newest entry first reads more naturally for an audit timeline.
   const entries = [...lead.activity_log].reverse()
@@ -413,7 +487,7 @@ function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
               className="text-xs font-semibold uppercase tracking-wide"
               style={{ color: accentColor }}
             >
-              {STATUS_COLUMNS.find((c) => c.status === lead.status)?.label ?? lead.status}
+              {STATUS_LABEL[lead.status] ?? lead.status}
             </p>
             <h2 className={cn(
               'mt-1 truncate text-xl font-bold tracking-tight',
@@ -451,6 +525,11 @@ function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
             <DetailRow term="Updated"  value={new Date(lead.updated_at).toLocaleString()} />
           </dl>
 
+          {/* Status editor — admin can move a lead between any statuses,
+              including the resolved ones, and attach an optional note
+              that gets recorded on the activity_log. */}
+          <StatusEditor lead={lead} onUpdate={onUpdate} />
+
           {/* Activity timeline */}
           <div className="mt-8">
             <h3 className="text-sm font-semibold tracking-tight">Activity</h3>
@@ -468,6 +547,128 @@ function LeadDrawer({ lead, onClose }: LeadDrawerProps) {
           </div>
         </div>
       </aside>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Status editor — sits inside the drawer. Compact "Change status" panel
+// with a row of status pills, an optional note field, and a Save button.
+// Selecting the current status is a no-op submit (we just close edit
+// mode). Submitting a different status calls the admin patch endpoint.
+// ---------------------------------------------------------------------------
+
+interface StatusEditorProps {
+  lead: Lead
+  onUpdate: (updated: Lead) => void
+}
+
+function StatusEditor({ lead, onUpdate }: StatusEditorProps) {
+  const [draftStatus, setDraftStatus] = useState<LeadStatus>(lead.status)
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // If the parent passes us a fresh lead (e.g. after our own patch
+  // resolves), reset our local draft to match. Prevents the editor from
+  // showing a stale draft after a successful save.
+  useEffect(() => {
+    setDraftStatus(lead.status)
+    setNote('')
+    setError(null)
+  }, [lead.id, lead.status])
+
+  const dirty = draftStatus !== lead.status || note.trim().length > 0
+
+  async function handleSave() {
+    if (!dirty) return
+    setSaving(true)
+    setError(null)
+    try {
+      const trimmedNote = note.trim()
+      const updated = await adminUpdateLead(lead.id, {
+        status: draftStatus,
+        note: trimmedNote || undefined,
+      })
+      onUpdate(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-8 rounded-lg border border-border bg-card/40 p-4">
+      <h3 className="text-sm font-semibold tracking-tight">Change status</h3>
+      <p className="mt-1 text-xs text-stone-500">
+        Admin edits are logged to the activity timeline.
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {ALL_COLUMNS.map((col) => {
+          const selected = draftStatus === col.status
+          return (
+            <button
+              key={col.status}
+              type="button"
+              onClick={() => setDraftStatus(col.status)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                selected
+                  ? 'text-white'
+                  : 'border-border bg-card text-stone-700 hover:bg-stone-50',
+              )}
+              style={
+                selected
+                  ? { backgroundColor: col.color, borderColor: col.color }
+                  : undefined
+              }
+            >
+              {col.label}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="mt-4">
+        <label
+          htmlFor="status-note"
+          className="text-xs font-medium uppercase tracking-wide text-stone-500"
+        >
+          Note (optional)
+        </label>
+        <textarea
+          id="status-note"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+          placeholder="e.g. Closed with FP Smith last Thursday."
+          className="mt-1.5 w-full rounded-md border border-border bg-card px-3 py-2 text-sm placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
+        />
+      </div>
+
+      {error && (
+        <p className="mt-3 text-xs" style={{ color: '#b85844' }}>
+          {error}
+        </p>
+      )}
+
+      <div className="mt-4 flex justify-end gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={!dirty || saving}
+          onClick={handleSave}
+          style={
+            dirty && !saving
+              ? { backgroundColor: STATUS_COLOR[draftStatus] }
+              : undefined
+          }
+        >
+          {saving ? 'Saving…' : 'Save changes'}
+        </Button>
+      </div>
     </div>
   )
 }

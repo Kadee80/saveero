@@ -109,6 +109,22 @@ def _ensure_user_row(user_id: str, email: str) -> None:
         }).execute()
 
 
+def _require_admin(user_id: str) -> None:
+    """
+    Application-layer admin check.
+
+    Important: get_db() uses the Supabase service-role key, which bypasses
+    RLS. That means database-layer policies are NOT enforced for backend-
+    initiated queries — admin-only endpoints have to check explicitly.
+    Looks up the caller's row in public.users and 403s unless role='admin'.
+    """
+    db = get_db()
+    own = db.table("users").select("role").eq("id", user_id).execute()
+    role = (own.data or [{}])[0].get("role") if own.data else None
+    if role != "admin":
+        raise HTTPException(403, "Admin access required")
+
+
 def _fetch_lead(user_id: str) -> Optional[dict]:
     """Return the lead row for a given user, or None if it doesn't exist."""
     db = get_db()
@@ -305,11 +321,11 @@ def append_activity(body: ActivityEntry, user: CurrentUser) -> dict:
 @router.get("/leads", response_model=List[LeadOut])
 def list_leads(user: CurrentUser) -> List[dict]:
     """
-    List every lead in the system, newest first. The RLS policy on the
-    leads table enforces admin-only access via public.is_admin(auth.uid()),
-    so a non-admin caller will get back an empty result rather than an
-    explicit 403 — which we surface as such here.
+    List every lead in the system, newest first. Admin only — see the
+    note on _require_admin for why this is an application-layer check
+    rather than a database RLS one.
     """
+    _require_admin(user["sub"])
     db = get_db()
     result = (
         db.table("leads")
@@ -317,16 +333,82 @@ def list_leads(user: CurrentUser) -> List[dict]:
         .order("created_at", desc=True)
         .execute()
     )
-    rows = result.data or []
+    return result.data or []
 
-    # Defensive: if the caller is non-admin and the RLS policy filtered
-    # everything out, distinguish that from "the table is empty" by
-    # checking the role of the calling user.
-    if not rows:
-        user_id: str = user["sub"]
-        own = db.table("users").select("role").eq("id", user_id).execute()
-        role = (own.data or [{}])[0].get("role")
-        if role != "admin":
-            raise HTTPException(403, "Admin access required")
 
-    return rows
+# ---------------------------------------------------------------------------
+# PATCH /api/leads/{lead_id} — admin status editing
+# ---------------------------------------------------------------------------
+
+class AdminPatchLeadRequest(BaseModel):
+    """
+    Admin patch payload. Status changes are the primary use case (mark a
+    lead as 'converted' when a partner reports the deal closed, 'lost'
+    when they go unresponsive, etc.) but we accept other fields too so
+    admins can fix typos on a captured name / pipeline without going
+    around the API.
+    """
+    status: Optional[LeadStatus] = None
+    note: Optional[str] = None
+    name: Optional[str] = None
+    role: Optional[LeadRole] = None
+    intent: Optional[LeadIntent] = None
+    pipeline: Optional[str] = None
+
+
+@router.patch("/leads/{lead_id}", response_model=LeadOut)
+def admin_patch_lead(
+    lead_id: str,
+    body: AdminPatchLeadRequest,
+    user: CurrentUser,
+) -> dict:
+    """
+    Admin-only partial update of an arbitrary lead.
+
+    Status changes bypass the forward-only ladder used by the user-facing
+    activity endpoint — an admin reviewing leads needs to be able to walk
+    a status back (e.g. mark a 'converted' lead 'engaged' again if the
+    partner's deal fell through). Any status change is logged to the
+    activity_log as `admin_marked_<status>` with the optional note.
+    """
+    _require_admin(user["sub"])
+    db = get_db()
+
+    existing_result = db.table("leads").select("*").eq("id", lead_id).execute()
+    existing_rows = existing_result.data or []
+    if not existing_rows:
+        raise HTTPException(404, f"Lead {lead_id} not found")
+    existing = existing_rows[0]
+
+    updates: dict[str, Any] = {}
+    for field in ("name", "role", "intent", "pipeline"):
+        v = getattr(body, field)
+        if v is not None:
+            updates[field] = v
+
+    if body.status is not None:
+        updates["status"] = body.status
+        # Always append an audit entry on status changes so the timeline
+        # makes clear this was an admin action, not a user transition.
+        updates["activity_log"] = _append_activity(
+            existing,
+            f"admin_marked_{body.status}",
+            {
+                "note": body.note,
+                "by_user_id": user["sub"],
+                "previous_status": existing.get("status"),
+            },
+        )
+
+    if not updates:
+        return existing
+
+    result = (
+        db.table("leads")
+        .update(updates)
+        .eq("id", lead_id)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(500, "Failed to update lead")
+    return result.data[0]
