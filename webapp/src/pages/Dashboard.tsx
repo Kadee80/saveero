@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getUser } from '@/api/auth'
-import { getMyLead, type Lead } from '@/api/leadsApi'
+import { createLead, getMyLead, type Lead } from '@/api/leadsApi'
 import { listAnalyses, type SavedAnalysisSummary } from '@/api/mortgageApi'
 import { formatCurrency } from '@/lib/utils'
 import { SCENARIO_PALETTE } from '@/lib/chartPalette'
@@ -58,10 +58,20 @@ export default function Dashboard() {
   }, [])
 
   // Initial lead fetch — decides whether to render the onboarding
-  // wizard or the hub. App.tsx is supposed to seed the lead row at
-  // signup, but if that hasn't completed yet we get a 404; we retry
-  // once after a short delay before giving up and rendering the hub
-  // (so we don't block the user on a CRM-only failure).
+  // wizard or the hub.
+  //
+  // Two concurrent things race on first sign-in: App.tsx's effect
+  // fires createLead() the moment session goes non-null, and Dashboard
+  // mounts and fires getMyLead() at roughly the same time. On a slow
+  // network or a cold Render dyno the read can lose, 404, and (under
+  // the old logic) skip straight to the hub — silently dropping the
+  // wizard for the user who needs it most.
+  //
+  // Fix: if the read 404s we don't just retry, we POST /api/leads
+  // ourselves (idempotent — backend is a no-op if App.tsx already won
+  // the race) and then re-read. Only after THAT round-trip fails do
+  // we fall back to rendering the hub, so wizard-skip becomes a real
+  // outage rather than a race condition.
   useEffect(() => {
     let cancelled = false
 
@@ -75,22 +85,26 @@ export default function Dashboard() {
     }
 
     async function load() {
+      // Happy path — lead row already exists.
       try {
         const lead = await getMyLead()
         applyLead(lead)
+        return
       } catch {
-        // One-shot retry — the row may still be mid-seed from App.tsx.
-        setTimeout(async () => {
-          if (cancelled) return
-          try {
-            const lead = await getMyLead()
-            applyLead(lead)
-          } catch {
-            // CRM read failed twice — don't block the product. Render
-            // the hub and let the user get on with what they came for.
-            if (!cancelled) setGate({ kind: 'ready' })
-          }
-        }, 600)
+        /* fall through to seed-and-retry */
+      }
+
+      // Lost the race (or fresh user, or stale session). Seed the row
+      // ourselves with the name carried on auth.user.user_metadata
+      // (set by the signup form), then re-read.
+      try {
+        const user = await getUser()
+        const name = (user?.user_metadata as { name?: string } | null)?.name
+        await createLead(name ? { name } : {})
+        const lead = await getMyLead()
+        applyLead(lead)
+      } catch {
+        if (!cancelled) setGate({ kind: 'ready' })
       }
     }
 
