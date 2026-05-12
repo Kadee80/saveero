@@ -87,6 +87,23 @@ class LeadOut(BaseModel):
     activity_log: List[dict]
     created_at: str
     updated_at: str
+    # Embedded from public.users via the user_id FK. Optional because the
+    # endpoints that return one lead at a time (GET /me, PUT /me, etc.)
+    # don't bother joining — we know the caller's email from the JWT.
+    # Populated on GET /api/leads (admin list) where the CRM needs it.
+    email: Optional[str] = None
+
+
+def _flatten_user(row: dict) -> dict:
+    """
+    PostgREST embeds the joined users row as a nested object under the
+    relationship name ('users'). Flatten that to a top-level `email`
+    field so callers don't have to know about the join shape.
+    """
+    nested = row.pop("users", None) or {}
+    if isinstance(nested, dict):
+        row["email"] = nested.get("email")
+    return row
 
 
 # ---------------------------------------------------------------------------
@@ -324,16 +341,22 @@ def list_leads(user: CurrentUser) -> List[dict]:
     List every lead in the system, newest first. Admin only — see the
     note on _require_admin for why this is an application-layer check
     rather than a database RLS one.
+
+    Embeds the public.users.email via the user_id FK so the CRM drawer
+    can show + mailto: contact info. PostgREST returns the joined row
+    as a nested object; _flatten_user() lifts the email up to a
+    top-level field so the response shape stays flat.
     """
     _require_admin(user["sub"])
     db = get_db()
     result = (
         db.table("leads")
-        .select("*")
+        .select("*, users(email)")
         .order("created_at", desc=True)
         .execute()
     )
-    return result.data or []
+    rows = result.data or []
+    return [_flatten_user(row) for row in rows]
 
 
 # ---------------------------------------------------------------------------

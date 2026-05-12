@@ -54,6 +54,13 @@ export interface Lead {
   activity_log: ActivityLogEntry[]
   created_at: string
   updated_at: string
+  /**
+   * Embedded from public.users via the user_id FK. Populated by the
+   * admin list endpoint (GET /api/leads) but null on the user-facing
+   * /me endpoints, which don't bother joining since the caller already
+   * knows their own email from the JWT.
+   */
+  email?: string | null
 }
 
 // ---------------------------------------------------------------------------

@@ -111,6 +111,48 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString()
 }
 
+/**
+ * Best-effort "when did this lead enter their current status."
+ *
+ * Walks the activity_log in reverse chronological order looking for the
+ * most recent entry whose kind matches the current status — that's the
+ * transition timestamp. For 'new' (the entry status) we fall back to
+ * created_at; for anything else we fall back to updated_at if no
+ * matching entry exists (which would mean the row was patched without
+ * leaving an audit trail — shouldn't happen with the current code but
+ * we handle it gracefully).
+ */
+function stageEnteredAt(lead: Lead): string {
+  if (lead.status === 'new') return lead.created_at
+  const matcher = STAGE_MATCHERS[lead.status]
+  if (matcher) {
+    for (let i = lead.activity_log.length - 1; i >= 0; i--) {
+      if (matcher(lead.activity_log[i].kind)) {
+        return lead.activity_log[i].at
+      }
+    }
+  }
+  return lead.updated_at
+}
+
+const STAGE_MATCHERS: Partial<Record<LeadStatus, (kind: string) => boolean>> = {
+  enriched:  (k) => k === 'completed_wizard' || k === 'admin_marked_enriched',
+  active:    (k) => k.startsWith('ran_') || k.startsWith('saved_') || k === 'admin_marked_active',
+  engaged:   (k) => k.startsWith('clicked_contact_') || k === 'admin_marked_engaged',
+  converted: (k) => k === 'admin_marked_converted',
+  lost:      (k) => k === 'admin_marked_lost',
+}
+
+/** Short, urgency-coded duration string — "just now" / "3h" / "2d". */
+function durationLabel(iso: string): string {
+  const ms = Date.now() - +new Date(iso)
+  const hours = Math.floor(ms / 3_600_000)
+  if (hours < 1) return 'just now'
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  return `${days}d`
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -414,8 +456,12 @@ function LeadCard({ lead, color, onSelect }: LeadCardProps) {
         <span className="font-medium" style={{ color }}>Last:</span>{' '}
         {lastEntry ? humanizeKind(lastEntry.kind) : 'No activity yet'}
       </p>
+      {/* Urgency cue — time the lead has been at its current stage.
+          Reads as "1d in stage" / "3h in stage". For 'new' leads the
+          stage-entry timestamp is created_at, so this also doubles as
+          a how-fresh-is-this-signup signal. */}
       <p className="mt-1 text-xs text-stone-500">
-        Created {timeAgo(lead.created_at)}
+        {durationLabel(stageEnteredAt(lead))} in stage
       </p>
     </button>
   )
@@ -510,7 +556,22 @@ function LeadDrawer({ lead, onClose, onUpdate }: LeadDrawerProps) {
         <div className="flex-1 overflow-y-auto px-6 pb-8">
           {/* Identity / metadata */}
           <dl className="grid grid-cols-3 gap-y-3 text-sm">
-            <DetailRow term="User"     value={<code className="text-xs">{lead.user_id.slice(0, 8)}</code>} />
+            <DetailRow
+              term="Email"
+              value={
+                lead.email ? (
+                  <a
+                    href={`mailto:${lead.email}`}
+                    className="break-all text-sm font-medium underline underline-offset-2 hover:opacity-80"
+                    style={{ color: accentColor }}
+                  >
+                    {lead.email}
+                  </a>
+                ) : (
+                  <span className="text-stone-400">—</span>
+                )
+              }
+            />
             <DetailRow term="Role"     value={ROLE_LABEL[lead.role]} />
             <DetailRow term="Intent"   value={INTENT_LABEL[lead.intent]} />
             <DetailRow
@@ -522,7 +583,14 @@ function LeadDrawer({ lead, onClose, onUpdate }: LeadDrawerProps) {
               }
             />
             <DetailRow term="Created"  value={new Date(lead.created_at).toLocaleString()} />
-            <DetailRow term="Updated"  value={new Date(lead.updated_at).toLocaleString()} />
+            <DetailRow
+              term="In stage"
+              value={
+                <span style={{ color: accentColor }}>
+                  {durationLabel(stageEnteredAt(lead))}
+                </span>
+              }
+            />
           </dl>
 
           {/* Status editor — admin can move a lead between any statuses,
