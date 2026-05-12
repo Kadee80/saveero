@@ -141,6 +141,34 @@ export async function updateMyLead(body: UpdateLeadRequest): Promise<Lead> {
   return res.json()
 }
 
+/** Caller's own public.users row + a precomputed is_admin flag. */
+export interface MyProfile {
+  id: string
+  email: string | null
+  role: string
+  is_admin: boolean
+}
+
+/**
+ * Lightweight self-profile read — used on App mount to decide whether to
+ * show the admin CRM nav link. Cheap GET against the user's own row;
+ * intentionally distinct from listAllLeads (which returns every lead in
+ * the system and was previously misused for admin detection — that
+ * payload could block the user's own /leads/me read on a cold dyno and
+ * left admin dashboards stuck on Loading…).
+ */
+export async function getMyProfile(): Promise<MyProfile> {
+  const auth = await authHeader()
+  if (!auth) throw new Error('Not signed in')
+  const res = await fetch('/api/me/profile', {
+    headers: { Authorization: auth },
+  })
+  if (!res.ok) {
+    throw new Error((await safeError(res)) || `profile fetch failed (${res.status})`)
+  }
+  return res.json()
+}
+
 /**
  * Fire-and-forget wrapper around appendActivity. Callers that just want
  * to log a user action without caring about the response should use this

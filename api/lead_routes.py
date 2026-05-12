@@ -142,6 +142,51 @@ def _require_admin(user_id: str) -> None:
         raise HTTPException(403, "Admin access required")
 
 
+# ---------------------------------------------------------------------------
+# GET /api/me/profile — lightweight self-profile read (used for admin
+# detection on App mount). Doesn't belong to /leads conceptually but lives
+# here for now since admin detection is the only caller. Move to a
+# dedicated user_routes.py when there's a second consumer.
+# ---------------------------------------------------------------------------
+
+class MyProfileOut(BaseModel):
+    id: str
+    email: Optional[str] = None
+    role: str
+    is_admin: bool
+
+
+@router.get("/me/profile", response_model=MyProfileOut)
+def get_my_profile(user: CurrentUser) -> dict:
+    """
+    Return the caller's own public.users row + a precomputed is_admin
+    flag. Replaces the previous "call listAllLeads and see if it 200s"
+    pattern, which was disastrously heavy on cold-start Render dynos:
+    listAllLeads returns every lead + their full activity_log, which on
+    a single-threaded backend blocked the user's own /leads/me read and
+    left the dashboard stuck on Loading… for admin accounts.
+    """
+    db = get_db()
+    user_id: str = user["sub"]
+    _ensure_user_row(user_id, user.get("email", ""))
+    result = (
+        db.table("users")
+        .select("id, email, role")
+        .eq("id", user_id)
+        .execute()
+    )
+    rows = result.data or []
+    if not rows:
+        raise HTTPException(404, "User row not found")
+    row = rows[0]
+    return {
+        "id": row["id"],
+        "email": row.get("email"),
+        "role": row.get("role") or "seller",
+        "is_admin": row.get("role") == "admin",
+    }
+
+
 def _fetch_lead(user_id: str) -> Optional[dict]:
     """Return the lead row for a given user, or None if it doesn't exist."""
     db = get_db()

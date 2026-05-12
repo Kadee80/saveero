@@ -4,7 +4,7 @@ import { Home as HomeIcon, House, Calculator, GitCompare, Compass, Inbox, Chevro
 import type { Session } from '@supabase/supabase-js'
 import { cn } from '@/lib/utils'
 import { supabase, signOut } from '@/api/auth'
-import { createLead, listAllLeads } from '@/api/leadsApi'
+import { createLead, getMyProfile } from '@/api/leadsApi'
 import Dashboard from './pages/Dashboard'
 import ListProperty from './pages/ListProperty'
 import MortgageCalculator from './pages/MortgageCalculator'
@@ -86,18 +86,21 @@ export default function App() {
     })
   }, [session?.user.id])
 
-  // Admin probe — runs once per signed-in session. Cheap GET that 403s
-  // for non-admins. We swallow all errors so a flaky network never hides
-  // the CRM link in a way that requires a hard reload to recover from.
+  // Admin probe — runs once per signed-in session. Cheap GET against
+  // the user's own row (was listAllLeads, which on a cold Render dyno
+  // could be a 100KB+ payload that blocked the user's parallel /leads/me
+  // read and left admin dashboards stuck on Loading…). Errors are
+  // swallowed so a flaky network never hides the CRM link in a way that
+  // requires a hard reload to recover from.
   useEffect(() => {
     if (!session) {
       setIsAdmin(false)
       return
     }
     let cancelled = false
-    listAllLeads()
-      .then(() => {
-        if (!cancelled) setIsAdmin(true)
+    getMyProfile()
+      .then((p) => {
+        if (!cancelled) setIsAdmin(p.is_admin)
       })
       .catch(() => {
         if (!cancelled) setIsAdmin(false)
