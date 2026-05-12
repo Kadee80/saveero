@@ -167,6 +167,13 @@ export default function AdminCRM() {
   // successful delete + after every refetch so the floating action bar
   // hides itself.
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
+  // Confirm-dialog state. Holds the pending delete payload + any error
+  // from the last attempt so the modal can show "Try again" inline
+  // instead of dumping the user back to the Kanban after a network blip.
+  const [confirmPayload, setConfirmPayload] = useState<{
+    ids: string[]
+    error: string | null
+  } | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   function toggleChecked(id: string) {
@@ -183,13 +190,21 @@ export default function AdminCRM() {
   }
 
   // Bulk delete — same handler is reused by the drawer's single-lead
-  // delete button (passes a one-element array). On success we splice
-  // the deleted ids out of local state instead of refetching, so the
-  // Kanban updates instantly without a round-trip flash.
-  async function handleBulkDelete(ids: string[]) {
+  // delete button (passes a one-element array). Two-step: this just
+  // opens the confirm modal; confirmDelete() below does the work after
+  // the user clicks the destructive button.
+  function handleBulkDelete(ids: string[]) {
     if (ids.length === 0) return
-    const word = ids.length === 1 ? 'lead' : `${ids.length} leads`
-    if (!window.confirm(`Delete ${word}? This can't be undone.`)) return
+    setConfirmPayload({ ids, error: null })
+  }
+
+  // Executes the pending delete. On success splices the deleted ids
+  // out of local state instead of refetching, so the Kanban updates
+  // instantly without a round-trip flash. On failure leaves the modal
+  // open with the error inline so the user can retry or cancel.
+  async function confirmDelete() {
+    if (!confirmPayload) return
+    const ids = confirmPayload.ids
     setDeleting(true)
     try {
       await adminBulkDeleteLeads(ids)
@@ -200,14 +215,19 @@ export default function AdminCRM() {
         for (const id of ids) next.delete(id)
         return next
       })
-      // If the drawer was open on a deleted lead, close it.
       if (selected && idSet.has(selected.id)) setSelected(null)
+      setConfirmPayload(null)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Delete failed'
-      window.alert(msg)
+      setConfirmPayload({ ids, error: msg })
     } finally {
       setDeleting(false)
     }
+  }
+
+  function cancelDelete() {
+    if (deleting) return
+    setConfirmPayload(null)
   }
 
   // Pulled out as a callback so the LeadDrawer's status editor can
@@ -428,7 +448,123 @@ export default function AdminCRM() {
           onDelete={() => handleBulkDelete([selected.id])}
         />
       )}
+
+      {confirmPayload && (
+        <ConfirmDeleteDialog
+          count={confirmPayload.ids.length}
+          error={confirmPayload.error}
+          deleting={deleting}
+          onConfirm={confirmDelete}
+          onCancel={cancelDelete}
+        />
+      )}
     </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Confirm-delete dialog — in-app modal that replaces window.confirm.
+// Backdrop click + Escape both cancel. Confirm button stays disabled
+// while the request is in flight; if it fails, the error renders
+// inline so the user can retry without losing their selection.
+// ---------------------------------------------------------------------------
+
+interface ConfirmDeleteDialogProps {
+  count: number
+  error: string | null
+  deleting: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+function ConfirmDeleteDialog({
+  count,
+  error,
+  deleting,
+  onConfirm,
+  onCancel,
+}: ConfirmDeleteDialogProps) {
+  // Escape cancels, same affordance as the LeadDrawer.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  const word = count === 1 ? 'lead' : `${count} leads`
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      {/* Backdrop — click to cancel. */}
+      <button
+        type="button"
+        aria-label="Cancel"
+        onClick={onCancel}
+        className="absolute inset-0 bg-stone-900/40"
+      />
+
+      {/* Card */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-delete-title"
+        className="relative w-full max-w-sm rounded-xl bg-card p-6 shadow-2xl ring-1 ring-border"
+      >
+        <div
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full"
+          style={{ backgroundColor: '#b8584414' }}
+        >
+          <Trash2 className="h-5 w-5" style={{ color: '#b85844' }} />
+        </div>
+        <h2
+          id="confirm-delete-title"
+          className="mt-3 text-lg font-bold tracking-tight"
+        >
+          Delete {word}?
+        </h2>
+        <p className="mt-1 text-sm text-stone-600">
+          This can't be undone. Activity history is gone for good. If
+          the user comes back, they'll be re-seeded as a fresh "new"
+          lead.
+        </p>
+
+        {error && (
+          <p
+            className="mt-4 rounded-md border px-3 py-2 text-xs"
+            style={{
+              color: '#b85844',
+              borderColor: '#b8584433',
+              backgroundColor: '#b858440a',
+            }}
+          >
+            {error}
+          </p>
+        )}
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={deleting}
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={deleting}
+            onClick={onConfirm}
+            style={{ backgroundColor: '#b85844' }}
+          >
+            {deleting ? 'Deleting…' : error ? 'Try again' : `Delete ${word}`}
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }
 
