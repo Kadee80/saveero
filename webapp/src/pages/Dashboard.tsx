@@ -63,15 +63,16 @@ export default function Dashboard() {
   // Two concurrent things race on first sign-in: App.tsx's effect
   // fires createLead() the moment session goes non-null, and Dashboard
   // mounts and fires getMyLead() at roughly the same time. On a slow
-  // network or a cold Render dyno the read can lose, 404, and (under
-  // the old logic) skip straight to the hub — silently dropping the
-  // wizard for the user who needs it most.
+  // network — especially a cold Render dyno warming up from sleep —
+  // the read can lose for several seconds before the seed lands.
   //
-  // Fix: if the read 404s we don't just retry, we POST /api/leads
-  // ourselves (idempotent — backend is a no-op if App.tsx already won
-  // the race) and then re-read. Only after THAT round-trip fails do
-  // we fall back to rendering the hub, so wizard-skip becomes a real
-  // outage rather than a race condition.
+  // Previous fix tried once, then once more after a single fallback
+  // create, then gave up. That dropped the wizard in the live demo
+  // when both calls lost to a cold-start. Now we retry the read with
+  // backoff (~10s of total patience) before falling back to creating
+  // the lead ourselves, and the loading state stays up the whole
+  // time. Refreshing the page (which used to be the only workaround)
+  // is no longer required.
   useEffect(() => {
     let cancelled = false
 
@@ -84,19 +85,29 @@ export default function Dashboard() {
       }
     }
 
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, ms))
+
     async function load() {
-      // Happy path — lead row already exists.
-      try {
-        const lead = await getMyLead()
-        applyLead(lead)
-        return
-      } catch {
-        /* fall through to seed-and-retry */
+      // Generous retry window. Most signups resolve on attempt 1 or 2;
+      // the longer tail covers Render cold-starts (free tier sleeps
+      // after 15 min idle, takes a few seconds to wake).
+      const RETRIES_MS = [0, 700, 1500, 3000, 5000]
+      for (const delay of RETRIES_MS) {
+        if (delay > 0) await sleep(delay)
+        if (cancelled) return
+        try {
+          const lead = await getMyLead()
+          applyLead(lead)
+          return
+        } catch {
+          // 404 (lead not seeded yet) or network — keep trying.
+        }
       }
 
-      // Lost the race (or fresh user, or stale session). Seed the row
-      // ourselves with the name carried on auth.user.user_metadata
-      // (set by the signup form), then re-read.
+      // Read never succeeded. Seed the row ourselves and try one
+      // more read. POST /api/leads is idempotent so this is safe
+      // even if App.tsx's createLead landed at the same time.
       try {
         const user = await getUser()
         const name = (user?.user_metadata as { name?: string } | null)?.name
