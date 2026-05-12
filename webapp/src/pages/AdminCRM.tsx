@@ -21,7 +21,7 @@
  * @returns {JSX.Element} The admin CRM dashboard
  */
 import { useCallback, useEffect, useState } from 'react'
-import { UserPlus, X } from 'lucide-react'
+import { Pencil, UserPlus, X } from 'lucide-react'
 import {
   adminUpdateLead,
   listAllLeads,
@@ -554,44 +554,13 @@ function LeadDrawer({ lead, onClose, onUpdate }: LeadDrawerProps) {
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-6 pb-8">
-          {/* Identity / metadata */}
-          <dl className="grid grid-cols-3 gap-y-3 text-sm">
-            <DetailRow
-              term="Email"
-              value={
-                lead.email ? (
-                  <a
-                    href={`mailto:${lead.email}`}
-                    className="break-all text-sm font-medium underline underline-offset-2 hover:opacity-80"
-                    style={{ color: accentColor }}
-                  >
-                    {lead.email}
-                  </a>
-                ) : (
-                  <span className="text-stone-400">—</span>
-                )
-              }
-            />
-            <DetailRow term="Role"     value={ROLE_LABEL[lead.role]} />
-            <DetailRow term="Intent"   value={INTENT_LABEL[lead.intent]} />
-            <DetailRow
-              term="Pipeline"
-              value={
-                lead.pipeline
-                  ? <PipelineChip pipeline={lead.pipeline} />
-                  : <span className="text-stone-400">—</span>
-              }
-            />
-            <DetailRow term="Created"  value={new Date(lead.created_at).toLocaleString()} />
-            <DetailRow
-              term="In stage"
-              value={
-                <span style={{ color: accentColor }}>
-                  {durationLabel(stageEnteredAt(lead))}
-                </span>
-              }
-            />
-          </dl>
+          {/* Identity / metadata — toggleable between read-only display
+              and an inline edit form for name / role / intent / pipeline. */}
+          <LeadDetailsCard
+            lead={lead}
+            accentColor={accentColor}
+            onUpdate={onUpdate}
+          />
 
           {/* Status editor — admin can move a lead between any statuses,
               including the resolved ones, and attach an optional note
@@ -616,6 +585,267 @@ function LeadDrawer({ lead, onClose, onUpdate }: LeadDrawerProps) {
         </div>
       </aside>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Lead details card — read-only metadata grid with an Edit toggle that
+// turns the editable fields (name / role / intent / pipeline) into an
+// inline form. Email + Created + In-stage stay read-only either way
+// since they're either externally-sourced (email comes from
+// public.users) or intrinsic (timestamps).
+// ---------------------------------------------------------------------------
+
+interface LeadDetailsCardProps {
+  lead: Lead
+  accentColor: string
+  onUpdate: (updated: Lead) => void
+}
+
+const ROLE_OPTIONS: { value: LeadRole; label: string }[] = [
+  { value: 'homeowner', label: 'Homeowner' },
+  { value: 'pro',       label: 'Pro' },
+  { value: 'unknown',   label: 'Unknown' },
+]
+
+const INTENT_OPTIONS: { value: LeadIntent; label: string }[] = [
+  { value: 'considering_move', label: 'Considering a move' },
+  { value: 'refinance',        label: 'Refinance' },
+  { value: 'rental_explore',   label: 'Exploring renting' },
+  { value: 'curious',          label: 'Curious' },
+  { value: 'unknown',          label: 'Unknown' },
+]
+
+// Empty-string sentinel for "no pipeline" — <select> values are
+// strings, so we can't use null directly.
+const PIPELINE_OPTIONS: { value: string; label: string }[] = [
+  { value: '',                  label: '— None —' },
+  { value: 'financial-planner', label: 'Financial planner' },
+  { value: 'real-estate-agent', label: 'Real estate agent' },
+  { value: 'mortgage-broker',   label: 'Mortgage broker' },
+]
+
+function LeadDetailsCard({ lead, accentColor, onUpdate }: LeadDetailsCardProps) {
+  const [editing, setEditing] = useState(false)
+  const [draftName, setDraftName] = useState(lead.name ?? '')
+  const [draftRole, setDraftRole] = useState<LeadRole>(lead.role)
+  const [draftIntent, setDraftIntent] = useState<LeadIntent>(lead.intent)
+  const [draftPipeline, setDraftPipeline] = useState<string>(lead.pipeline ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // When the selected lead changes (or the parent hands us a fresh copy
+  // after another save), reset all draft state. Without this, editing
+  // lead A, switching to lead B, then opening A again would show
+  // stale drafts.
+  useEffect(() => {
+    setDraftName(lead.name ?? '')
+    setDraftRole(lead.role)
+    setDraftIntent(lead.intent)
+    setDraftPipeline(lead.pipeline ?? '')
+    setEditing(false)
+    setError(null)
+  }, [lead.id, lead.updated_at])
+
+  function handleCancel() {
+    setDraftName(lead.name ?? '')
+    setDraftRole(lead.role)
+    setDraftIntent(lead.intent)
+    setDraftPipeline(lead.pipeline ?? '')
+    setEditing(false)
+    setError(null)
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      // Send only the fields that actually changed. The backend treats
+      // omitted fields as "leave alone" so this minimizes the patch.
+      const patch: {
+        name?: string
+        role?: LeadRole
+        intent?: LeadIntent
+        pipeline?: string
+      } = {}
+      const trimmedName = draftName.trim()
+      if (trimmedName !== (lead.name ?? '')) patch.name = trimmedName
+      if (draftRole !== lead.role) patch.role = draftRole
+      if (draftIntent !== lead.intent) patch.intent = draftIntent
+      if ((draftPipeline || null) !== (lead.pipeline ?? null)) {
+        // Empty string from the select represents "clear pipeline". The
+        // backend's patch model lets pipeline be omitted to keep the
+        // current value; passing an empty string clears it.
+        patch.pipeline = draftPipeline
+      }
+
+      if (Object.keys(patch).length === 0) {
+        setEditing(false)
+        return
+      }
+
+      const updated = await adminUpdateLead(lead.id, patch)
+      onUpdate(updated)
+      setEditing(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="space-y-3">
+        <dl className="grid grid-cols-3 gap-y-3 text-sm">
+          <DetailRow
+            term="Name"
+            value={
+              lead.name
+                ? lead.name
+                : <span className="text-stone-400">(no name yet)</span>
+            }
+          />
+          <DetailRow
+            term="Email"
+            value={
+              lead.email ? (
+                <a
+                  href={`mailto:${lead.email}`}
+                  className="break-all text-sm font-medium underline underline-offset-2 hover:opacity-80"
+                  style={{ color: accentColor }}
+                >
+                  {lead.email}
+                </a>
+              ) : (
+                <span className="text-stone-400">—</span>
+              )
+            }
+          />
+          <DetailRow term="Role"   value={ROLE_LABEL[lead.role]} />
+          <DetailRow term="Intent" value={INTENT_LABEL[lead.intent]} />
+          <DetailRow
+            term="Pipeline"
+            value={
+              lead.pipeline
+                ? <PipelineChip pipeline={lead.pipeline} />
+                : <span className="text-stone-400">—</span>
+            }
+          />
+          <DetailRow term="Created" value={new Date(lead.created_at).toLocaleString()} />
+          <DetailRow
+            term="In stage"
+            value={
+              <span style={{ color: accentColor }}>
+                {durationLabel(stageEnteredAt(lead))}
+              </span>
+            }
+          />
+        </dl>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900"
+          >
+            <Pencil className="h-3 w-3" />
+            Edit details
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ---- Edit mode ----
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-4">
+      <h3 className="text-sm font-semibold tracking-tight">Edit details</h3>
+
+      <div className="mt-4 space-y-3 text-sm">
+        <Field label="Name">
+          <input
+            type="text"
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
+            placeholder="e.g. Jane Doe"
+            className="w-full rounded-md border border-border bg-card px-3 py-2 placeholder:text-stone-400 focus:border-stone-400 focus:outline-none"
+            autoFocus
+          />
+        </Field>
+
+        <Field label="Role">
+          <select
+            value={draftRole}
+            onChange={(e) => setDraftRole(e.target.value as LeadRole)}
+            className="w-full rounded-md border border-border bg-card px-3 py-2 focus:border-stone-400 focus:outline-none"
+          >
+            {ROLE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Intent">
+          <select
+            value={draftIntent}
+            onChange={(e) => setDraftIntent(e.target.value as LeadIntent)}
+            className="w-full rounded-md border border-border bg-card px-3 py-2 focus:border-stone-400 focus:outline-none"
+          >
+            {INTENT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Pipeline">
+          <select
+            value={draftPipeline}
+            onChange={(e) => setDraftPipeline(e.target.value)}
+            className="w-full rounded-md border border-border bg-card px-3 py-2 focus:border-stone-400 focus:outline-none"
+          >
+            {PIPELINE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      {error && (
+        <p className="mt-3 text-xs" style={{ color: '#b85844' }}>{error}</p>
+      )}
+
+      <div className="mt-4 flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={saving}
+          onClick={handleCancel}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          disabled={saving}
+          onClick={handleSave}
+          style={!saving ? { backgroundColor: accentColor } : undefined}
+        >
+          {saving ? 'Saving…' : 'Save changes'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium uppercase tracking-wide text-stone-500">
+        {label}
+      </span>
+      <div className="mt-1.5">{children}</div>
+    </label>
   )
 }
 
