@@ -21,8 +21,9 @@
  * @returns {JSX.Element} The admin CRM dashboard
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Pencil, UserPlus, X } from 'lucide-react'
+import { Pencil, Trash2, UserPlus, X } from 'lucide-react'
 import {
+  adminBulkDeleteLeads,
   adminUpdateLead,
   listAllLeads,
   type ActivityLogEntry,
@@ -162,6 +163,52 @@ export default function AdminCRM() {
   const [error, setError] = useState<'forbidden' | 'other' | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [selected, setSelected] = useState<Lead | null>(null)
+  // Multi-select state for bulk delete. Reset to empty after every
+  // successful delete + after every refetch so the floating action bar
+  // hides itself.
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState(false)
+
+  function toggleChecked(id: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function clearSelection() {
+    setCheckedIds(new Set())
+  }
+
+  // Bulk delete — same handler is reused by the drawer's single-lead
+  // delete button (passes a one-element array). On success we splice
+  // the deleted ids out of local state instead of refetching, so the
+  // Kanban updates instantly without a round-trip flash.
+  async function handleBulkDelete(ids: string[]) {
+    if (ids.length === 0) return
+    const word = ids.length === 1 ? 'lead' : `${ids.length} leads`
+    if (!window.confirm(`Delete ${word}? This can't be undone.`)) return
+    setDeleting(true)
+    try {
+      await adminBulkDeleteLeads(ids)
+      const idSet = new Set(ids)
+      setLeads((prev) => (prev ? prev.filter((l) => !idSet.has(l.id)) : prev))
+      setCheckedIds((prev) => {
+        const next = new Set(prev)
+        for (const id of ids) next.delete(id)
+        return next
+      })
+      // If the drawer was open on a deleted lead, close it.
+      if (selected && idSet.has(selected.id)) setSelected(null)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Delete failed'
+      window.alert(msg)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   // Pulled out as a callback so the LeadDrawer's status editor can
   // trigger a refresh after a successful patch without re-mounting the
@@ -304,6 +351,8 @@ export default function AdminCRM() {
                 color={color}
                 leads={columnLeads}
                 onSelect={setSelected}
+                checkedIds={checkedIds}
+                onToggleCheck={toggleChecked}
               />
             )
           })}
@@ -330,6 +379,8 @@ export default function AdminCRM() {
                   color={color}
                   leads={columnLeads}
                   onSelect={setSelected}
+                  checkedIds={checkedIds}
+                  onToggleCheck={toggleChecked}
                 />
               )
             })}
@@ -337,11 +388,44 @@ export default function AdminCRM() {
         </div>
       </div>
 
+      {/* Floating bulk-action bar. Slides up from the bottom whenever
+          one or more cards are selected. Centered, max-content width
+          so it doesn't span the whole viewport. */}
+      {checkedIds.size > 0 && (
+        <div className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
+          <div className="flex items-center gap-3 rounded-full bg-stone-900 px-4 py-2 text-sm text-white shadow-xl ring-1 ring-stone-900/20">
+            <span className="font-medium">
+              {checkedIds.size} selected
+            </span>
+            <span className="h-4 w-px bg-stone-700" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={() => handleBulkDelete([...checkedIds])}
+              disabled={deleting}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors hover:bg-stone-700 disabled:opacity-60"
+              style={{ color: '#fca5a5' }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+            <button
+              type="button"
+              onClick={clearSelection}
+              disabled={deleting}
+              className="rounded-full px-3 py-1 text-sm font-medium text-stone-300 transition-colors hover:bg-stone-700 hover:text-white"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       {selected && (
         <LeadDrawer
           lead={selected}
           onClose={() => setSelected(null)}
           onUpdate={handleAfterUpdate}
+          onDelete={() => handleBulkDelete([selected.id])}
         />
       )}
     </>
@@ -372,9 +456,18 @@ interface KanbanColumnProps {
   color: string
   leads: Lead[]
   onSelect: (lead: Lead) => void
+  checkedIds: Set<string>
+  onToggleCheck: (id: string) => void
 }
 
-function KanbanColumn({ label, color, leads, onSelect }: KanbanColumnProps) {
+function KanbanColumn({
+  label,
+  color,
+  leads,
+  onSelect,
+  checkedIds,
+  onToggleCheck,
+}: KanbanColumnProps) {
   return (
     <section className="flex flex-col gap-3">
       <header
@@ -402,6 +495,8 @@ function KanbanColumn({ label, color, leads, onSelect }: KanbanColumnProps) {
               lead={lead}
               color={color}
               onSelect={onSelect}
+              checked={checkedIds.has(lead.id)}
+              onToggleCheck={onToggleCheck}
             />
           ))
         )}
@@ -420,24 +515,63 @@ interface LeadCardProps {
   lead: Lead
   color: string
   onSelect: (lead: Lead) => void
+  checked: boolean
+  onToggleCheck: (id: string) => void
 }
 
-function LeadCard({ lead, color, onSelect }: LeadCardProps) {
+function LeadCard({ lead, color, onSelect, checked, onToggleCheck }: LeadCardProps) {
   const lastEntry =
     lead.activity_log.length > 0
       ? lead.activity_log[lead.activity_log.length - 1]
       : null
 
+  // Outer is a div-with-button-semantics (not a <button>) so we can
+  // nest a real <input type=checkbox> inside without violating HTML's
+  // "no interactive descendants of <button>" rule. Keyboard handler
+  // mirrors what a <button> would do: Enter/Space open the drawer.
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(lead)}
-      className="block w-full rounded-xl bg-card p-4 text-left shadow-md ring-1 ring-border transition-shadow hover:shadow-lg"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect(lead)
+        }
+      }}
+      className={cn(
+        'group relative block w-full cursor-pointer rounded-xl bg-card p-4 text-left shadow-md ring-1 ring-border transition-shadow hover:shadow-lg focus:outline-none focus:ring-2',
+        checked && 'ring-2',
+      )}
+      style={checked ? { boxShadow: `0 0 0 2px ${color}` } : undefined}
     >
-      <p className={cn(
-        'text-sm font-semibold tracking-tight',
-        !lead.name && 'text-stone-400'
-      )}>
+      {/* Selection checkbox — top-right. Visible on hover or when
+          checked. Clicks stop propagation so they don't open the drawer. */}
+      <label
+        className={cn(
+          'absolute right-2 top-2 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md transition-opacity',
+          checked
+            ? 'opacity-100'
+            : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100',
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => onToggleCheck(lead.id)}
+          aria-label={`Select ${lead.name ?? 'unnamed lead'}`}
+          className="h-4 w-4 cursor-pointer rounded border-stone-300 accent-stone-700"
+        />
+      </label>
+
+      <p
+        className={cn(
+          'pr-7 text-sm font-semibold tracking-tight',
+          !lead.name && 'text-stone-400',
+        )}
+      >
         {lead.name || '(no name yet)'}
       </p>
 
@@ -463,7 +597,7 @@ function LeadCard({ lead, color, onSelect }: LeadCardProps) {
       <p className="mt-1 text-xs text-stone-500">
         {durationLabel(stageEnteredAt(lead))} in stage
       </p>
-    </button>
+    </div>
   )
 }
 
@@ -500,9 +634,12 @@ interface LeadDrawerProps {
   onClose: () => void
   /** Called with the updated lead after a successful admin patch. */
   onUpdate: (updated: Lead) => void
+  /** Called to delete the currently-open lead. Parent handles confirm
+   *  + the API call + closing the drawer. */
+  onDelete: () => void
 }
 
-function LeadDrawer({ lead, onClose, onUpdate }: LeadDrawerProps) {
+function LeadDrawer({ lead, onClose, onUpdate, onDelete }: LeadDrawerProps) {
   // Resolve color from the unified label/color maps so this works for
   // both the live-funnel statuses and the resolved ones.
   const accentColor = STATUS_COLOR[lead.status] ?? SCENARIO_PALETTE.violet
@@ -581,6 +718,20 @@ function LeadDrawer({ lead, onClose, onUpdate }: LeadDrawerProps) {
                 ))}
               </ol>
             )}
+          </div>
+
+          {/* Destructive zone — small, separated, dimmed by default
+              so it doesn't compete with the editor sections above. */}
+          <div className="mt-10 border-t border-border pt-6">
+            <button
+              type="button"
+              onClick={onDelete}
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-stone-500 transition-colors hover:bg-stone-100"
+              style={{ color: '#b85844' }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete lead
+            </button>
           </div>
         </div>
       </aside>

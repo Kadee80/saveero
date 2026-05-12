@@ -335,6 +335,37 @@ def append_activity(body: ActivityEntry, user: CurrentUser) -> dict:
 # GET /api/leads — admin only — full list for the CRM dashboard
 # ---------------------------------------------------------------------------
 
+class BulkDeleteLeadsRequest(BaseModel):
+    """Body for POST /api/leads/bulk-delete."""
+    lead_ids: List[str] = Field(default_factory=list)
+
+
+@router.post("/leads/bulk-delete")
+def bulk_delete_leads(
+    body: BulkDeleteLeadsRequest,
+    user: CurrentUser,
+) -> dict:
+    """
+    Admin-only — delete one or more leads by id.
+
+    Single endpoint for both "delete a single lead from the drawer" and
+    "delete N selected from the Kanban" — the frontend calls this with
+    a one-element list in the former case and an N-element list in the
+    latter. Only the `leads` row is removed; the corresponding
+    `public.users` row stays untouched. If the user comes back to the
+    app, App.tsx's seed-on-session effect will create a fresh lead row
+    with status='new' — re-entry rather than ban.
+    """
+    _require_admin(user["sub"])
+    if not body.lead_ids:
+        return {"deleted": 0}
+
+    db = get_db()
+    result = db.table("leads").delete().in_("id", body.lead_ids).execute()
+    deleted = len(result.data or [])
+    return {"deleted": deleted}
+
+
 @router.get("/leads", response_model=List[LeadOut])
 def list_leads(user: CurrentUser) -> List[dict]:
     """

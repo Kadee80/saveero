@@ -207,6 +207,31 @@ export async function adminUpdateLead(
   return res.json()
 }
 
+/**
+ * Admin-only — bulk delete leads by id. Works for both "delete one"
+ * (pass a single-element array from the drawer) and "delete N
+ * selected" (pass the array from the Kanban's multi-select state).
+ * Returns the number actually removed.
+ *
+ * Only the leads row is deleted; the public.users record stays. The
+ * user can sign back in and App.tsx will re-seed a fresh 'new' lead.
+ */
+export async function adminBulkDeleteLeads(
+  leadIds: string[],
+): Promise<{ deleted: number }> {
+  const auth = await authHeader()
+  if (!auth) throw new Error('Not signed in')
+  const res = await fetch('/api/leads/bulk-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: auth },
+    body: JSON.stringify({ lead_ids: leadIds }),
+  })
+  if (!res.ok) {
+    throw new Error((await safeError(res)) || `bulk delete failed (${res.status})`)
+  }
+  return res.json()
+}
+
 /** Admin-only — full list for the CRM dashboard. Non-admins get 403. */
 export async function listAllLeads(): Promise<Lead[]> {
   const auth = await authHeader()
