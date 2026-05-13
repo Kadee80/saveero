@@ -90,10 +90,23 @@ const INTENT_LABEL: Record<LeadIntent, string> = {
   unknown:          'Unknown intent',
 }
 
+// Keys are the canonical long-form slugs written by both the user-side
+// OnboardingWizard and the admin-side LeadDetailsCard edit form. The
+// older short-form keys (planner / agent / broker) were a no-op fallback
+// — they never matched anything actually stored on `leads.pipeline`.
 const PIPELINE_COLOR: Record<string, string> = {
-  planner: SCENARIO_PALETTE.blue,
-  agent:   SCENARIO_PALETTE.emerald,
-  broker:  SCENARIO_PALETTE.amber,
+  'financial-planner': SCENARIO_PALETTE.blue,
+  'real-estate-agent': SCENARIO_PALETTE.emerald,
+  'mortgage-broker':   SCENARIO_PALETTE.amber,
+}
+
+// Display labels for pipeline slugs. Falls back to a humanized slug
+// ("foo-bar" → "Foo bar") for any unknown value so the chip never
+// renders raw slugs like "financial-planner" in the UI.
+const PIPELINE_LABEL: Record<string, string> = {
+  'financial-planner': 'Financial planner',
+  'real-estate-agent': 'Real estate agent',
+  'mortgage-broker':   'Mortgage broker',
 }
 
 /** snake_case → Title case for activity event slugs. */
@@ -747,6 +760,10 @@ function Chip({ children }: { children: React.ReactNode }) {
 
 function PipelineChip({ pipeline }: { pipeline: string }) {
   const dotColor = PIPELINE_COLOR[pipeline] ?? SCENARIO_PALETTE.violet
+  const label =
+    PIPELINE_LABEL[pipeline] ??
+    // Humanize any unknown slug instead of dumping the raw value.
+    pipeline.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-700">
       <span
@@ -754,7 +771,7 @@ function PipelineChip({ pipeline }: { pipeline: string }) {
         className="inline-block h-2 w-2 rounded-full"
         style={{ backgroundColor: dotColor }}
       />
-      {pipeline.charAt(0).toUpperCase() + pipeline.slice(1)}
+      {label}
     </span>
   )
 }

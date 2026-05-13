@@ -155,7 +155,16 @@ export default function Dashboard() {
   }
 
   if (gate.kind === 'wizard') {
-    return <OnboardingWizard onComplete={handleWizardComplete} />
+    // Pass the in-flight lead so the wizard can pre-fill its name input
+    // from the signup-form value (and skip the round-trip of re-typing
+    // for users who provided one). Role / intent / pipeline are still
+    // unknown at this point — that's why we're showing the wizard.
+    return (
+      <OnboardingWizard
+        lead={gate.lead}
+        onComplete={handleWizardComplete}
+      />
+    )
   }
 
   return (
