@@ -21,6 +21,7 @@ from api.listing_wizard_routes import router as wizard_router
 from api.mortgage_routes import router as mortgage_router
 from api.scenario_routes import router as scenario_router
 from api.lead_routes import router as lead_router
+from api.fthb_routes import router as fthb_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ app.include_router(wizard_router, prefix="/api")
 app.include_router(mortgage_router, prefix="/api")
 app.include_router(scenario_router, prefix="/api")
 app.include_router(lead_router, prefix="/api")
+app.include_router(fthb_router, prefix="/api")
 
 # Future modules — uncomment as they ship:
 # from api.property_routes   import router as property_router
