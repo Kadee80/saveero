@@ -21,6 +21,11 @@ const Landing = lazy(() => import('./pages/Landing'))
 // the main bundle for the 99% of users who never see it.
 const AdminCRM = lazy(() => import('./pages/AdminCRM'))
 
+// Lazy-load the FTHB decision map — only first-time-buyer leads land here
+// by default (the Dashboard's HeroTool routes them in based on lead.role).
+// Other audiences can still hit the URL directly via the sidebar nav.
+const FTHBDecisionMap = lazy(() => import('./pages/FTHBDecisionMap'))
+
 type NavItem =
   | { divider: true }
   | { to: string; label: string; icon: typeof HomeIcon }
@@ -36,6 +41,10 @@ function buildNavItems(isAdmin: boolean): NavItem[] {
   const primary: NavItem[] = [
     { to: '/',                    label: 'Home',         icon: HomeIcon    },
     { to: '/decision-map',        label: 'Decision Map', icon: Compass     },
+    // FTHB engine — visible to everyone; first-time buyers also get it
+    // as their default Dashboard hero, but the link is unconditional so
+    // anyone curious can drill in. Same pattern as Decision Map.
+    { to: '/fthb-decision-map',   label: 'FTHB',         icon: Compass     },
     { to: '/mortgage-calculator', label: 'Mortgage',     icon: Calculator  },
     { to: '/scenarios',           label: 'Compare',      icon: GitCompare  },
   ]
@@ -243,6 +252,7 @@ export default function App() {
               <Route path="/mortgage-calculator" element={<MortgageCalculator />} />
               <Route path="/scenarios"           element={<ScenarioComparison />} />
               <Route path="/decision-map"        element={<DecisionMap />} />
+              <Route path="/fthb-decision-map"   element={<FTHBDecisionMap />} />
               {/* Catch-all — sends the user to the dashboard if they
                   land on an unauthed-only path (most commonly /login
                   after the session is established) or a stale

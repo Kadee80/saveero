@@ -43,11 +43,16 @@ import OnboardingWizard from '@/pages/OnboardingWizard'
  *              the OnboardingWizard inline instead of the hub.
  *   ready    — lead loaded with real role/intent OR we gave up after
  *              the retry and decided to render the hub anyway.
+ *
+ * The 'ready' branch carries `role` so the hub can pick the right
+ * marquee tool (FTHB engine for first-time buyers, homeowner Decision
+ * Map for everyone else). It can be null if we gave up on the lead
+ * fetch entirely; in that case we fall back to the homeowner hub.
  */
 type LeadGate =
   | { kind: 'loading' }
   | { kind: 'wizard'; lead: Lead }
-  | { kind: 'ready' }
+  | { kind: 'ready'; role: Lead['role'] | null }
 
 export default function Dashboard() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
@@ -81,7 +86,7 @@ export default function Dashboard() {
       if (lead.role === 'unknown' || lead.intent === 'unknown') {
         setGate({ kind: 'wizard', lead })
       } else {
-        setGate({ kind: 'ready' })
+        setGate({ kind: 'ready', role: lead.role })
       }
     }
 
@@ -115,7 +120,9 @@ export default function Dashboard() {
         const lead = await getMyLead()
         applyLead(lead)
       } catch {
-        if (!cancelled) setGate({ kind: 'ready' })
+        // Lead fetch never resolved — fall back to homeowner hub
+        // rather than blocking the user behind a permanent loading state.
+        if (!cancelled) setGate({ kind: 'ready', role: null })
       }
     }
 
@@ -137,12 +144,12 @@ export default function Dashboard() {
         // explanation.
         setGate({ kind: 'wizard', lead })
       } else {
-        setGate({ kind: 'ready' })
+        setGate({ kind: 'ready', role: lead.role })
       }
     } catch {
       // PUT succeeded but the refetch failed — assume the values are
-      // good and let the user into the hub.
-      setGate({ kind: 'ready' })
+      // good and let the user into the hub. Role unknown → homeowner default.
+      setGate({ kind: 'ready', role: null })
     }
   }
 
@@ -167,10 +174,16 @@ export default function Dashboard() {
     )
   }
 
+  // First-time buyers get the FTHB engine as their marquee tool; everyone
+  // else (current homeowners, pros, fallback) lands on the homeowner
+  // Decision Map. Secondary tools + Recent calculations stay common —
+  // both audiences want the calculator + saved work.
+  const isFTHB = gate.kind === 'ready' && gate.role === 'first_time_buyer'
+
   return (
     <div className="mx-auto max-w-6xl space-y-10 p-6 md:py-10">
       <Greeting email={userEmail} />
-      <HeroTool />
+      {isFTHB ? <FTHBHeroTool /> : <HeroTool />}
       <SecondaryTools />
       <RecentCalculations />
     </div>
@@ -256,6 +269,71 @@ function HeroTool() {
               tabIndex={-1}
             >
               Open Decision Map <ArrowRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Link>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// FTHB hero — shown to leads with role='first_time_buyer'. Routes to the
+// /fthb-decision-map page (separate engine from the homeowner Decision Map).
+// Same card chrome + dusty-blue accent so the hub feels consistent across
+// audiences; the copy + CTA make it clear this is the buy-your-first-home
+// view, not the what-do-I-do-with-my-current-home view.
+// ---------------------------------------------------------------------------
+
+function FTHBHeroTool() {
+  return (
+    <Link
+      to="/fthb-decision-map"
+      className="group block overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border transition-shadow hover:shadow-xl"
+      style={{ borderTopColor: SCENARIO_PALETTE.blue, borderTopWidth: 4 }}
+    >
+      <div className="flex flex-col md:flex-row">
+        <div
+          className="aspect-[16/10] w-full overflow-hidden md:aspect-auto md:w-2/5"
+          style={{ backgroundColor: `${SCENARIO_PALETTE.blue}10` }}
+        >
+          <img
+            src="/illustrations/decision.png"
+            alt=""
+            aria-hidden="true"
+            loading="eager"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+          />
+        </div>
+        <div className="flex-1 p-6 md:p-10">
+          <div className="flex items-center gap-2">
+            <Compass
+              className="h-5 w-5"
+              style={{ color: SCENARIO_PALETTE.blue }}
+            />
+            <span
+              className="text-sm font-semibold uppercase tracking-wide"
+              style={{ color: SCENARIO_PALETTE.blue }}
+            >
+              First-time homebuyer · Decision Map
+            </span>
+          </div>
+          <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">
+            Five paths to your first home
+          </h2>
+          <p className="mt-3 max-w-xl text-stone-600">
+            Continue renting, buy a starter, buy your "reach" home, buy with
+            downpayment assistance, or wait. Same horizon, same cash, with
+            monthly housing cost and future savings capacity baked in.
+          </p>
+          <div className="mt-6">
+            <Button
+              size="lg"
+              className="shadow-lg transition-shadow group-hover:shadow-xl"
+              style={{ backgroundColor: SCENARIO_PALETTE.blue }}
+              tabIndex={-1}
+            >
+              Open FTHB Decision Map <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           </div>
         </div>
