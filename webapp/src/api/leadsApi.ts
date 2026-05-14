@@ -19,7 +19,7 @@ import { authHeader } from '@/api/auth'
 // and match the SQL enums exactly.
 // ---------------------------------------------------------------------------
 
-export type LeadRole = 'homeowner' | 'pro' | 'unknown'
+export type LeadRole = 'homeowner' | 'first_time_buyer' | 'pro' | 'unknown'
 
 export type LeadIntent =
   | 'considering_move'

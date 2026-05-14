@@ -77,9 +77,10 @@ const STATUS_COLOR: Record<LeadStatus, string> = Object.fromEntries(
 ) as Record<LeadStatus, string>
 
 const ROLE_LABEL: Record<LeadRole, string> = {
-  homeowner: 'Homeowner',
-  pro:       'Pro',
-  unknown:   'Unknown role',
+  homeowner:        'Current homeowner',
+  first_time_buyer: 'First-time buyer',
+  pro:              'Pro',
+  unknown:          'Unknown role',
 }
 
 const INTENT_LABEL: Record<LeadIntent, string> = {
@@ -907,9 +908,10 @@ interface LeadDetailsCardProps {
 }
 
 const ROLE_OPTIONS: { value: LeadRole; label: string }[] = [
-  { value: 'homeowner', label: 'Homeowner' },
-  { value: 'pro',       label: 'Pro' },
-  { value: 'unknown',   label: 'Unknown' },
+  { value: 'homeowner',        label: 'Current homeowner' },
+  { value: 'first_time_buyer', label: 'First-time buyer' },
+  { value: 'pro',              label: 'Pro' },
+  { value: 'unknown',          label: 'Unknown' },
 ]
 
 const INTENT_OPTIONS: { value: LeadIntent; label: string }[] = [
