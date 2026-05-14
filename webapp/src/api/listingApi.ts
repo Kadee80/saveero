@@ -7,7 +7,15 @@
  * - GET /api/listings - fetch user's saved listings
  *
  * All requests include JWT authorization header via authHeader().
- * Endpoints are called relative to VITE_API_URL in production or via Vite proxy in dev.
+ *
+ * Endpoints are called with RELATIVE /api/* paths — same as every other
+ * API client in this app (fthbApi, leadsApi, mortgageApi, scenarioApi).
+ * In dev, Vite's proxy forwards /api to localhost:8000; in prod,
+ * vercel.json rewrites /api/* to the Render backend server-side. Going
+ * through the rewrite keeps these calls same-origin, which avoids the
+ * cross-origin CORS preflight + raw cold-start path that previously made
+ * listing generation appear to hang. Do NOT reintroduce a VITE_API_URL
+ * base here — it would diverge from the rest of the app again.
  *
  * @module api/listingApi
  * @example
@@ -174,21 +182,15 @@ export interface ListingFormData {
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 /**
- * API base URL - determined by environment
- * - Production: VITE_API_URL environment variable points to Railway backend
- * - Development: Empty string, Vite dev server proxies /api/* to localhost:8000
- * - Fallback: Empty string for relative URLs
- */
-const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
-
-/**
- * Generic API fetch wrapper - handles auth and error handling
+ * Generic API fetch wrapper - handles auth and error handling.
  *
- * Automatically adds JWT authorization header from current session.
- * Throws an Error if response is not 2xx with full error details.
+ * Calls relative /api/* paths (see the module header) so the request
+ * stays same-origin and rides the Vite proxy / vercel.json rewrite
+ * like every other API client. Automatically adds the JWT auth header
+ * from the current session. Throws an Error if the response is not 2xx.
  *
  * @template T - Expected response type
- * @param {string} url - API endpoint path (e.g., "/api/listings/generate")
+ * @param {string} url - Relative API path (e.g., "/api/listings/generate")
  * @param {RequestInit} init - Fetch options (method, headers, body, etc.)
  * @returns {Promise<T>} Parsed JSON response
  * @throws {Error} If request fails or response is not ok
@@ -206,7 +208,7 @@ async function apiFetch<T>(url: string, init: RequestInit): Promise<T> {
   }
   if (auth) headers['Authorization'] = auth
 
-  const res = await fetch(`${API_BASE}${url}`, { ...init, headers })
+  const res = await fetch(url, { ...init, headers })
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
     throw new Error(`${res.status} ${res.statusText}: ${text}`)
