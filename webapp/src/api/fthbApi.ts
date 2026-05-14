@@ -14,7 +14,12 @@
  * TypeScript types mirror `scenarios/fthb/schemas.py` field-for-field.
  * If a Pydantic model changes, update the mirror here and the compile
  * will catch any drift in pages that consume it.
+ *
+ * The scenario/* engine calls are public (no auth). The analyses/*
+ * persistence calls require an active Supabase session and go through
+ * authHeader(), matching the mortgage analyzer precedent.
  */
+import { authHeader } from '@/api/auth'
 
 // ---------------------------------------------------------------------------
 // Request — FTHB inputs (~25 fields, server applies defaults)
@@ -258,6 +263,96 @@ export async function runFthbDecisionMap(
     throw new Error(msg || `FTHB decision-map failed (${res.status})`)
   }
   return res.json()
+}
+
+// ---------------------------------------------------------------------------
+// /api/fthb/analyses — persistence (requires auth)
+//
+// Mirrors the mortgage analyzer's save/load. The client sends inputs +
+// result as opaque JSON blobs; the server denormalizes a few fields out
+// of them for cheap list queries. Types mirror SavedAnalysisSummary /
+// SaveAnalysisRequest in scenarios/fthb/schemas.py.
+// ---------------------------------------------------------------------------
+
+export interface SavedFthbAnalysisSummary {
+  id: string
+  label: string | null
+  annual_household_income: number | null
+  starter_home_price: number | null
+  preferred_home_price: number | null
+  horizon_years: number | null
+  best_executable_path: string | null
+  best_net_position: number | null
+  created_at: string
+}
+
+export interface SaveFthbAnalysisRequest {
+  label?: string
+  inputs: FTHBInputs
+  result: RunAllResponse
+}
+
+/** Save a computed FTHB analysis for the current user. */
+export async function saveFthbAnalysis(
+  body: SaveFthbAnalysisRequest,
+): Promise<{ id: string }> {
+  const auth = await authHeader()
+  if (!auth) throw new Error('Not signed in')
+  const res = await fetch('/api/fthb/analyses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: auth },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new Error((await safeError(res)) || `save failed (${res.status})`)
+  }
+  const json = await res.json()
+  return { id: json.id }
+}
+
+/** List the current user's saved FTHB analyses, newest first. */
+export async function listFthbAnalyses(): Promise<SavedFthbAnalysisSummary[]> {
+  const auth = await authHeader()
+  if (!auth) throw new Error('Not signed in')
+  const res = await fetch('/api/fthb/analyses', {
+    headers: { Authorization: auth },
+  })
+  if (!res.ok) {
+    throw new Error((await safeError(res)) || `list failed (${res.status})`)
+  }
+  return res.json()
+}
+
+/** Fetch one saved FTHB analysis — full inputs + result blobs. */
+export async function getFthbAnalysis(id: string): Promise<{
+  id: string
+  label: string | null
+  inputs: FTHBInputs
+  result: RunAllResponse
+  created_at: string
+}> {
+  const auth = await authHeader()
+  if (!auth) throw new Error('Not signed in')
+  const res = await fetch(`/api/fthb/analyses/${encodeURIComponent(id)}`, {
+    headers: { Authorization: auth },
+  })
+  if (!res.ok) {
+    throw new Error((await safeError(res)) || `get failed (${res.status})`)
+  }
+  return res.json()
+}
+
+/** Delete one saved FTHB analysis. Treats 204 as success. */
+export async function deleteFthbAnalysis(id: string): Promise<void> {
+  const auth = await authHeader()
+  if (!auth) throw new Error('Not signed in')
+  const res = await fetch(`/api/fthb/analyses/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: auth },
+  })
+  if (!res.ok && res.status !== 204) {
+    throw new Error((await safeError(res)) || `delete failed (${res.status})`)
+  }
 }
 
 // ---------------------------------------------------------------------------

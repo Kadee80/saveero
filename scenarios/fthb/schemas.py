@@ -246,3 +246,30 @@ class RunAllResponse(BaseModel):
             decision_map=DecisionMapOut.from_result(r.decision_map),
             audit=AuditReportOut.from_result(r.audit),
         )
+
+
+# ---------------------------------------------------------------------------
+# Persistence — saved FTHB analyses
+#
+# Mirrors mortgage/schemas.py's SaveAnalysisRequest / SavedAnalysisSummary.
+# The client sends inputs + result as opaque JSON blobs; the server pulls a
+# few denormalized fields out of them for lightweight list queries.
+# ---------------------------------------------------------------------------
+
+class SavedAnalysisSummary(BaseModel):
+    """Lightweight row for lists."""
+    id: str
+    label: Optional[str] = None
+    annual_household_income: Optional[float] = None
+    starter_home_price: Optional[float] = None
+    preferred_home_price: Optional[float] = None
+    horizon_years: Optional[float] = None
+    best_executable_path: Optional[str] = None
+    best_net_position: Optional[float] = None
+    created_at: str
+
+
+class SaveAnalysisRequest(BaseModel):
+    label: Optional[str] = Field(None, max_length=120)
+    inputs: dict                           # the original FTHBInputs request body for replay
+    result: dict                           # the computed RunAllResponse (for display without recompute)

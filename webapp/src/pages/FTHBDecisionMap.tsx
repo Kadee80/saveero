@@ -10,32 +10,41 @@
  * The page reads from /api/fthb/scenarios/run — one round-trip returns
  * everything it needs (5 scenarios + decision map + audit). On every
  * input change the user explicitly hits Recalculate; we don't auto-run
- * because some of the input fields are typed text inputs and an
- * on-change debounce would either lag or thrash the engine.
+ * because the input fields are typed number inputs and an on-change
+ * debounce would either lag or thrash the engine.
  *
- * MVP scope (per Katie 2026-05-13): the 8 most user-visible inputs
- * (income, debts, cash, down payment, rent, starter price, preferred
- * price, horizon) are exposed in the input panel; the rest stay at
- * Excel defaults. A future pass can surface the system assumptions
- * (rate, tax %, DPA amount, etc.) via an "Advanced" disclosure when
- * the audience wants to override them.
+ * Inputs are collected through a 3-step wizard (matching the
+ * OnboardingWizard pattern — the #1 demo-feedback theme was that
+ * form-heavy pages overwhelm users):
+ *
+ *   1. Financial profile  — income, debts, cash, down payment, credit
+ *   2. Home goals         — rent, starter + preferred prices, horizon
+ *   3. Advanced (optional) — system assumptions (rate, tax %, DPA, …),
+ *                            all pre-filled to the spreadsheet defaults
+ *
+ * Step 3's "Recalculate" runs the engine. The wizard stays mounted so
+ * the user can step back and tweak; results render below it.
  *
  * @component
  * @returns {JSX.Element}
  */
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
   Building2,
   Check,
-  ChevronDown,
   Clock,
   Compass,
   DollarSign,
   Home,
   KeyRound,
   RefreshCw,
+  Save,
   Sparkles,
+  Wallet,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -43,7 +52,9 @@ import { SCENARIO_PALETTE } from '@/lib/chartPalette'
 import { trackActivity } from '@/api/leadsApi'
 import {
   DEFAULT_FTHB_INPUTS,
+  getFthbAnalysis,
   runAllFthb,
+  saveFthbAnalysis,
   type FTHBInputs,
   type RunAllResponse,
   type ScenarioComparisonRowOut,
@@ -97,59 +108,128 @@ function metaFor(name: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Input panel — exposes the 8 most consequential fields. Everything else
-// stays at the Excel defaults. The panel collapses to a one-line summary
-// once the user has run at least once, so the comparison stays in view.
+// Input wizard — three steps. Steps 1-2 carry the consumer-facing inputs;
+// step 3 ("Advanced") carries the system assumptions, all pre-filled to
+// the spreadsheet defaults so the user can click straight through.
+//
+// Each field descriptor maps to one key on FTHBInputs. `asPercent` fields
+// are stored as decimals on FTHBInputs (0.0575) but displayed/edited as
+// percentages (5.75) — NumberField handles the conversion.
 // ---------------------------------------------------------------------------
 
-interface VisibleInputs {
-  annual_household_income: number
-  monthly_debt_obligations: number
-  available_cash_for_purchase: number
-  universal_down_payment: number
-  current_monthly_rent: number
-  starter_home_price: number
-  preferred_home_price: number
-  horizon_years: number
-}
-
-const VISIBLE_FIELDS: Array<{
-  key: keyof VisibleInputs
+interface FieldDef {
+  key: keyof FTHBInputs
   label: string
   hint: string
   prefix?: string
   suffix?: string
-}> = [
+  asPercent?: boolean
+}
+
+/** Step 1 — Financial profile. */
+const STEP_1_FIELDS: FieldDef[] = [
   { key: 'annual_household_income',     label: 'Annual household income', hint: 'Gross — before tax.', prefix: '$' },
   { key: 'monthly_debt_obligations',    label: 'Monthly debt obligations', hint: 'Student loans, auto, credit cards.', prefix: '$' },
   { key: 'available_cash_for_purchase', label: 'Available cash for purchase', hint: 'Total cash for down + closing.', prefix: '$' },
   { key: 'universal_down_payment',      label: 'Down payment used', hint: 'Same down payment for every buy scenario.', prefix: '$' },
-  { key: 'current_monthly_rent',        label: 'Current monthly rent', hint: 'What you pay today.', prefix: '$' },
-  { key: 'starter_home_price',          label: 'Starter home target price', hint: 'Lower entry-point option.', prefix: '$' },
-  { key: 'preferred_home_price',        label: 'Preferred home target price', hint: 'Aspirational / "reach" option.', prefix: '$' },
-  { key: 'horizon_years',               label: 'Comparison horizon', hint: 'How long you plan to stay.', suffix: 'years' },
+  { key: 'estimated_credit_score',      label: 'Estimated credit score', hint: 'Used for product/pricing context.' },
 ]
+
+/** Step 2 — Home goals. */
+const STEP_2_FIELDS: FieldDef[] = [
+  { key: 'current_monthly_rent',  label: 'Current monthly rent', hint: 'What you pay today.', prefix: '$' },
+  { key: 'starter_home_price',    label: 'Starter home target price', hint: 'Lower entry-point option.', prefix: '$' },
+  { key: 'preferred_home_price',  label: 'Preferred home target price', hint: 'Aspirational / "reach" option.', prefix: '$' },
+  { key: 'horizon_years',         label: 'Comparison horizon', hint: 'How long you plan to stay.', suffix: 'years' },
+]
+
+/**
+ * Step 3 — Advanced system assumptions. Grouped with light subheadings
+ * so 16 fields don't read as an undifferentiated wall. All optional —
+ * defaults match the spreadsheet's Inputs sheet column B.
+ */
+const STEP_3_GROUPS: Array<{ heading: string; fields: FieldDef[] }> = [
+  {
+    heading: 'Rates & term',
+    fields: [
+      { key: 'mortgage_rate',         label: 'Mortgage interest rate', hint: 'Standard financing rate.', asPercent: true, suffix: '%' },
+      { key: 'mortgage_term_months',  label: 'Mortgage term', hint: 'Amortization period.', suffix: 'months' },
+    ],
+  },
+  {
+    heading: 'Costs & taxes',
+    fields: [
+      { key: 'purchase_closing_cost_pct', label: 'Purchase closing cost', hint: '% of purchase price.', asPercent: true, suffix: '%' },
+      { key: 'property_tax_annual_pct',   label: 'Property tax (annual)', hint: '% of home value per year.', asPercent: true, suffix: '%' },
+      { key: 'insurance_annual_pct',      label: 'Insurance (annual)', hint: '% of home value per year.', asPercent: true, suffix: '%' },
+      { key: 'monthly_hoa',               label: 'Monthly HOA', hint: 'Condo / association fee.', prefix: '$' },
+      { key: 'maintenance_annual_pct',    label: 'Maintenance reserve (annual)', hint: '% of home value per year.', asPercent: true, suffix: '%' },
+    ],
+  },
+  {
+    heading: 'Growth assumptions',
+    fields: [
+      { key: 'annual_home_appreciation', label: 'Annual home appreciation', hint: 'Home value growth rate.', asPercent: true, suffix: '%' },
+      { key: 'annual_rent_inflation',    label: 'Annual rent inflation', hint: 'Rent growth rate.', asPercent: true, suffix: '%' },
+      { key: 'return_on_unspent_cash',   label: 'Return on unspent cash', hint: 'Growth rate on cash not used to buy.', asPercent: true, suffix: '%' },
+      { key: 'take_home_pct',            label: 'Take-home % of gross income', hint: 'Gross-to-take-home haircut.', asPercent: true, suffix: '%' },
+    ],
+  },
+  {
+    heading: 'Feasibility & assistance',
+    fields: [
+      { key: 'max_dti',               label: 'Max DTI allowed', hint: 'Lender debt-to-income ceiling.', asPercent: true, suffix: '%' },
+      { key: 'post_close_cushion_pct', label: 'Post-close cushion', hint: '% of cash kept as a liquidity warning threshold.', asPercent: true, suffix: '%' },
+      { key: 'min_post_close_cushion', label: 'Minimum cash cushion', hint: 'Dollar floor for the cushion check.', prefix: '$' },
+      { key: 'available_dpa',          label: 'Downpayment assistance', hint: 'Repayable DPA amount.', prefix: '$' },
+      { key: 'delay_monthly_savings',  label: 'Delay scenario monthly savings', hint: 'Extra saved each month during the 12-month delay.', prefix: '$' },
+    ],
+  },
+]
+
+type WizardStep = 1 | 2 | 3
+const TOTAL_WIZARD_STEPS = 3
 
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export default function FTHBDecisionMap() {
-  // We keep the full FTHBInputs around — visible fields are a slice of it,
-  // but the engine call wants all of them. Hidden fields stay at default.
   const [inputs, setInputs] = useState<FTHBInputs>(DEFAULT_FTHB_INPUTS)
   const [result, setResult] = useState<RunAllResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [inputsOpen, setInputsOpen] = useState(true)
+  // Wizard step the input collector is currently showing. Persists
+  // across recalcs so a user who tweaked an Advanced field and ran it
+  // stays on the Advanced step rather than getting bounced to step 1.
+  const [step, setStep] = useState<WizardStep>(1)
 
-  // Initial run on mount with default inputs so the comparison + snapshot
-  // are populated immediately — no "click Recalculate to see anything"
-  // empty state.
+  // ?analysis=<id> deep-link from the Dashboard's "Recent calculations"
+  // panel: load that saved analysis instead of running defaults.
+  const [searchParams] = useSearchParams()
+  const analysisId = searchParams.get('analysis')
+
+  // Initial load on mount. With ?analysis=<id> we hydrate from the saved
+  // row (no recompute — the saved result blob is authoritative). Without
+  // it we run defaults so the comparison + snapshot populate immediately
+  // rather than showing an empty "click Recalculate" state.
   useEffect(() => {
-    void recalc(inputs)
-    // We intentionally only fire once on mount; subsequent runs are
-    // user-initiated via the Recalculate button.
+    if (analysisId) {
+      getFthbAnalysis(analysisId)
+        .then((saved) => {
+          setInputs(saved.inputs)
+          setResult(saved.result)
+        })
+        .catch((err: unknown) => {
+          const msg =
+            err instanceof Error ? err.message : 'Could not load saved analysis'
+          setError(`${msg} — showing defaults instead.`)
+          void recalc(DEFAULT_FTHB_INPUTS)
+        })
+    } else {
+      void recalc(inputs)
+    }
+    // Fire once on mount; subsequent runs are user-initiated.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -202,11 +282,11 @@ export default function FTHBDecisionMap() {
         </p>
       </header>
 
-      <InputPanel
+      <InputWizard
         inputs={inputs}
         setField={setField}
-        open={inputsOpen}
-        onToggle={() => setInputsOpen((o) => !o)}
+        step={step}
+        onStepChange={setStep}
         onRecalc={() => recalc(inputs)}
         loading={loading}
       />
@@ -230,6 +310,7 @@ export default function FTHBDecisionMap() {
       {result && (
         <>
           <RecommendationCard recommendation={result.decision_map.recommendation} />
+          <SaveBar inputs={inputs} result={result} />
           <ComparisonTable rows={result.decision_map.comparison} />
           <ScenarioDetailGrid result={result} />
         </>
@@ -245,104 +326,232 @@ export default function FTHBDecisionMap() {
 }
 
 // ---------------------------------------------------------------------------
-// Input panel
+// Input wizard — 3-step input collector. Mirrors the OnboardingWizard
+// pattern: progress strip, one step's fields at a time, Back / Next, and
+// the last step's primary button runs the engine.
 // ---------------------------------------------------------------------------
 
-interface InputPanelProps {
+interface InputWizardProps {
   inputs: FTHBInputs
   setField: <K extends keyof FTHBInputs>(key: K, value: FTHBInputs[K]) => void
-  open: boolean
-  onToggle: () => void
+  step: WizardStep
+  onStepChange: (s: WizardStep) => void
   onRecalc: () => void
   loading: boolean
 }
 
-function InputPanel({
+const STEP_META: Record<
+  WizardStep,
+  { icon: typeof Home; title: string; blurb: string }
+> = {
+  1: {
+    icon: Wallet,
+    title: 'Your financial profile',
+    blurb: 'Income, debts, and the cash you have to work with.',
+  },
+  2: {
+    icon: Home,
+    title: 'Your home goals',
+    blurb: 'What you pay in rent today and the price points you’re weighing.',
+  },
+  3: {
+    icon: Compass,
+    title: 'Advanced assumptions',
+    blurb:
+      'Optional — every field is pre-filled to the model defaults. Tweak only what you want to override.',
+  },
+}
+
+function InputWizard({
   inputs,
   setField,
-  open,
-  onToggle,
+  step,
+  onStepChange,
   onRecalc,
   loading,
-}: InputPanelProps) {
+}: InputWizardProps) {
+  const meta = STEP_META[step]
+  const Icon = meta.icon
+  const isLast = step === TOTAL_WIZARD_STEPS
+
+  function renderField(f: FieldDef) {
+    return (
+      <NumberField
+        key={f.key}
+        label={f.label}
+        hint={f.hint}
+        prefix={f.prefix}
+        suffix={f.suffix}
+        asPercent={f.asPercent}
+        value={inputs[f.key] as number}
+        onChange={(v) => setField(f.key, v as FTHBInputs[typeof f.key])}
+      />
+    )
+  }
+
   return (
     <section
       className="overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border"
       style={{ borderTopColor: SCENARIO_PALETTE.blue, borderTopWidth: 4 }}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-4 px-6 py-4 text-left hover:bg-stone-50"
-        aria-expanded={open}
-        aria-controls="fthb-input-grid"
-      >
-        <div className="flex items-center gap-3">
-          <Compass
-            className="h-5 w-5 shrink-0"
-            style={{ color: SCENARIO_PALETTE.blue }}
-          />
-          <div>
-            <h2 className="text-base font-semibold tracking-tight">
-              Your inputs
-            </h2>
-            <p className="mt-0.5 text-xs text-stone-500">
-              {open
-                ? 'Edit the numbers below, then Recalculate.'
-                : `Income ${formatCurrency(inputs.annual_household_income)} · Cash ${formatCurrency(inputs.available_cash_for_purchase)} · Horizon ${inputs.horizon_years}y`}
-            </p>
-          </div>
-        </div>
-        <ChevronDown
-          className={cn('h-4 w-4 shrink-0 text-stone-500 transition-transform', open && 'rotate-180')}
-        />
-      </button>
+      <div className="p-6 md:p-8">
+        <ProgressStrip current={step} total={TOTAL_WIZARD_STEPS} />
 
-      {open && (
-        <>
+        <header className="mt-6">
           <div
-            id="fthb-input-grid"
-            className="grid gap-4 border-t border-border p-6 sm:grid-cols-2"
+            className="inline-flex rounded-md p-2"
+            style={{ backgroundColor: `${SCENARIO_PALETTE.blue}1a` }}
           >
-            {VISIBLE_FIELDS.map((f) => (
-              <NumberField
-                key={f.key}
-                label={f.label}
-                hint={f.hint}
-                prefix={f.prefix}
-                suffix={f.suffix}
-                value={inputs[f.key] as number}
-                onChange={(v) => setField(f.key, v as FTHBInputs[typeof f.key])}
-              />
-            ))}
+            <Icon className="h-5 w-5" style={{ color: SCENARIO_PALETTE.blue }} />
           </div>
-          <div className="flex items-center justify-end gap-3 border-t border-border bg-stone-50/50 px-6 py-4">
-            <p className="mr-auto text-xs text-stone-500">
-              System assumptions (rate, tax %, etc.) stay at Excel defaults.
-            </p>
-            <Button
-              type="button"
-              size="lg"
-              disabled={loading}
-              onClick={onRecalc}
-              style={{ backgroundColor: SCENARIO_PALETTE.blue }}
-              className="shadow-md"
-            >
-              <RefreshCw className={cn('mr-1.5 h-4 w-4', loading && 'animate-spin')} />
-              {loading ? 'Running…' : 'Recalculate'}
-            </Button>
-          </div>
-        </>
-      )}
+          <h2 className="mt-3 text-xl font-bold tracking-tight">
+            {meta.title}
+          </h2>
+          <p className="mt-1 text-sm text-stone-600">{meta.blurb}</p>
+        </header>
+
+        {/* Step body. min-h keeps the card height stable across steps. */}
+        <div className="mt-5 min-h-[260px]">
+          {step === 1 && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {STEP_1_FIELDS.map(renderField)}
+            </div>
+          )}
+          {step === 2 && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {STEP_2_FIELDS.map(renderField)}
+            </div>
+          )}
+          {step === 3 && (
+            <div className="space-y-6">
+              {STEP_3_GROUPS.map((group) => (
+                <div key={group.heading}>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                    {group.heading}
+                  </h3>
+                  <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                    {group.fields.map(renderField)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer — Back left, primary action right. */}
+      <div className="flex items-center justify-between gap-3 border-t border-border bg-stone-50/50 px-6 py-4">
+        {step > 1 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={loading}
+            onClick={() => onStepChange((step - 1) as WizardStep)}
+          >
+            <ArrowLeft className="mr-1 h-4 w-4" /> Back
+          </Button>
+        ) : (
+          <span className="text-xs text-stone-500">
+            Step {step} of {TOTAL_WIZARD_STEPS}
+          </span>
+        )}
+
+        {isLast ? (
+          <Button
+            type="button"
+            size="lg"
+            disabled={loading}
+            onClick={onRecalc}
+            style={{ backgroundColor: SCENARIO_PALETTE.blue }}
+            className="shadow-md"
+          >
+            <RefreshCw className={cn('mr-1.5 h-4 w-4', loading && 'animate-spin')} />
+            {loading ? 'Running…' : 'Recalculate'}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="lg"
+            disabled={loading}
+            onClick={() => onStepChange((step + 1) as WizardStep)}
+            style={{ backgroundColor: SCENARIO_PALETTE.blue }}
+            className="shadow-md"
+          >
+            Next <ArrowRight className="ml-1 h-4 w-4" />
+          </Button>
+        )}
+      </div>
     </section>
   )
 }
 
+// ---------------------------------------------------------------------------
+// Progress strip — N numbered dots connected by line segments. Same visual
+// language as the OnboardingWizard's strip.
+// ---------------------------------------------------------------------------
+
+function ProgressStrip({ current, total }: { current: number; total: number }) {
+  const dots = Array.from({ length: total }, (_, i) => i + 1)
+  return (
+    <div
+      className="flex items-center gap-2"
+      role="progressbar"
+      aria-valuemin={1}
+      aria-valuemax={total}
+      aria-valuenow={current}
+      aria-label={`Step ${current} of ${total}`}
+    >
+      {dots.map((n, i) => {
+        const isActive = n === current
+        const isDone = n < current
+        return (
+          <div key={n} className="flex flex-1 items-center gap-2">
+            <span
+              className={cn(
+                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
+                isActive || isDone
+                  ? 'border-transparent text-white'
+                  : 'border-border bg-card text-stone-400',
+              )}
+              style={
+                isActive || isDone
+                  ? { backgroundColor: SCENARIO_PALETTE.blue }
+                  : undefined
+              }
+            >
+              {isDone ? <Check className="h-3.5 w-3.5" /> : n}
+            </span>
+            {i < dots.length - 1 && (
+              <span
+                aria-hidden="true"
+                className="h-px flex-1 transition-colors"
+                style={{
+                  backgroundColor: isDone
+                    ? SCENARIO_PALETTE.blue
+                    : 'var(--border, #e7e5e4)',
+                }}
+              />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Labeled number input. `asPercent` fields are stored on FTHBInputs as
+ * decimals (0.0575) but shown/edited as percentages (5.75) — the
+ * conversion happens here so the rest of the page never has to think
+ * about it. Rounds the displayed percentage to 4 places to avoid float
+ * noise like 3.4999999%.
+ */
 function NumberField({
   label,
   hint,
   prefix,
   suffix,
+  asPercent,
   value,
   onChange,
 }: {
@@ -350,9 +559,13 @@ function NumberField({
   hint: string
   prefix?: string
   suffix?: string
+  asPercent?: boolean
   value: number
   onChange: (v: number) => void
 }) {
+  const displayValue = asPercent
+    ? Math.round(value * 100 * 1e4) / 1e4
+    : value
   return (
     <label className="block">
       <span className="text-xs font-medium uppercase tracking-wide text-stone-500">
@@ -366,10 +579,11 @@ function NumberField({
         )}
         <input
           type="number"
-          value={Number.isFinite(value) ? value : ''}
+          value={Number.isFinite(displayValue) ? displayValue : ''}
           onChange={(e) => {
-            const n = e.target.value === '' ? 0 : Number(e.target.value)
-            if (!Number.isNaN(n)) onChange(n)
+            const raw = e.target.value === '' ? 0 : Number(e.target.value)
+            if (Number.isNaN(raw)) return
+            onChange(asPercent ? raw / 100 : raw)
           }}
           className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm focus:outline-none"
           style={{ paddingLeft: prefix ? 0 : undefined }}
@@ -458,6 +672,97 @@ function RecPick({ label, value }: { label: string; value: string }) {
         {value}
       </p>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Save bar — names + persists the current analysis. Mirrors the mortgage
+// calculator's save affordance. Requires an active session; if the user
+// isn't signed in the save call throws and we surface that inline rather
+// than hiding the control (the page itself is behind auth anyway).
+// ---------------------------------------------------------------------------
+
+function SaveBar({
+  inputs,
+  result,
+}: {
+  inputs: FTHBInputs
+  result: RunAllResponse
+}) {
+  const [label, setLabel] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [savedId, setSavedId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  // Any input change since the last save invalidates the "Saved ✓" state
+  // — clear it so the user knows the new numbers aren't persisted yet.
+  useEffect(() => {
+    setSavedId(null)
+  }, [inputs, result])
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      const { id } = await saveFthbAnalysis({
+        label: label.trim() || undefined,
+        inputs,
+        result,
+      })
+      setSavedId(id)
+      trackActivity('saved_fthb_analysis', {
+        best: result.decision_map.recommendation.best_executable_path,
+      })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-border">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <label className="flex-1">
+          <span className="sr-only">Name this scenario</span>
+          <input
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Name this scenario — e.g. &quot;7-year horizon, $90k cash&quot;"
+            className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm placeholder:text-stone-400 focus:border-stone-400 focus:outline-none focus:ring-1"
+          />
+        </label>
+        <Button
+          type="button"
+          disabled={saving}
+          onClick={handleSave}
+          style={{ backgroundColor: SCENARIO_PALETTE.blue }}
+          className="shadow-sm"
+        >
+          {savedId ? (
+            <>
+              <Check className="mr-1.5 h-4 w-4" /> Saved
+            </>
+          ) : (
+            <>
+              <Save className="mr-1.5 h-4 w-4" />
+              {saving ? 'Saving…' : 'Save analysis'}
+            </>
+          )}
+        </Button>
+      </div>
+      {error && (
+        <p className="mt-2 text-xs" style={{ color: '#b85844' }}>
+          {error}
+        </p>
+      )}
+      {savedId && !error && (
+        <p className="mt-2 text-xs text-stone-500">
+          Saved to your dashboard — find it under Recent calculations.
+        </p>
+      )}
+    </section>
   )
 }
 

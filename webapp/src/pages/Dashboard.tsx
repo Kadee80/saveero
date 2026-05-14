@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { getUser } from '@/api/auth'
 import { createLead, getMyLead, type Lead } from '@/api/leadsApi'
 import { listAnalyses, type SavedAnalysisSummary } from '@/api/mortgageApi'
+import { listFthbAnalyses, type SavedFthbAnalysisSummary } from '@/api/fthbApi'
 import { formatCurrency } from '@/lib/utils'
 import { SCENARIO_PALETTE } from '@/lib/chartPalette'
 import OnboardingWizard from '@/pages/OnboardingWizard'
@@ -184,7 +185,7 @@ export default function Dashboard() {
     <div className="mx-auto max-w-6xl space-y-10 p-6 md:py-10">
       <Greeting email={userEmail} />
       {isFTHB ? <FTHBHeroTool /> : <HeroTool />}
-      <SecondaryTools />
+      <SecondaryTools isFTHB={isFTHB} />
       <RecentCalculations />
     </div>
   )
@@ -395,7 +396,12 @@ function SecondaryCard({
   )
 }
 
-function SecondaryTools() {
+// Secondary tools are the same two surfaces for both audiences — the
+// Mortgage Calculator and Compare Scenarios are both pure financing
+// tools, useful whether you already own or are buying your first home.
+// Only the copy is forked: buyers get a "home you're considering"
+// framing, owners get the neutral framing.
+function SecondaryTools({ isFTHB }: { isFTHB: boolean }) {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <SecondaryCard
@@ -404,7 +410,11 @@ function SecondaryTools() {
         color={SCENARIO_PALETTE.violet}
         eyebrow="Quick math"
         title="Mortgage Calculator"
-        blurb="Single-scenario monthly payment, total cost, and amortization. Live rates from the Fed."
+        blurb={
+          isFTHB
+            ? 'Estimate the monthly payment, total cost, and amortization on a home you’re considering. Live rates from the Fed.'
+            : 'Single-scenario monthly payment, total cost, and amortization. Live rates from the Fed.'
+        }
       />
       <SecondaryCard
         to="/scenarios"
@@ -412,50 +422,75 @@ function SecondaryTools() {
         color={SCENARIO_PALETTE.emerald}
         eyebrow="Side-by-side"
         title="Compare Scenarios"
-        blurb="Stack up to three financing scenarios — different down payments, terms, or rates — and pick the winner."
+        blurb={
+          isFTHB
+            ? 'Stack up to three financing options — different down payments, terms, or rates — side by side before you commit.'
+            : 'Stack up to three financing scenarios — different down payments, terms, or rates — and pick the winner.'
+        }
       />
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Recent calculations panel — proof-of-concept "your saved work" surface.
+// Recent calculations panel — "your saved work" surface.
 //
-// Phase 1 (this commit): renders saved Mortgage Calculator analyses only,
-// using the existing /api/mortgage/analyses list endpoint. No new backend.
-// Phase 2 (deferred): extend to Compare Scenarios and Decision Map saves
-// once those tools have persistence wired up.
+// Renders saved Mortgage Calculator analyses AND saved FTHB Decision Map
+// analyses, merged into one most-recent-first list. Each card deep-links
+// back to its tool with ?analysis=<id> so the user resumes exactly where
+// they left off (handled in MortgageCalculator.tsx / FTHBDecisionMap.tsx).
 //
-// Each card click re-opens the calculator with that analysis's inputs
-// prefilled via the ?analysis=<id> query param (handled in
-// MortgageCalculator.tsx).
+// The two list endpoints are fetched in parallel with allSettled — if one
+// fails (or the user has saves in only one tool) the other still renders.
+// Compare Scenarios saves are still deferred (no persistence yet).
 // ---------------------------------------------------------------------------
 
+/** Discriminated union so one list can hold both kinds of saved work. */
+type RecentItem =
+  | { kind: 'mortgage'; a: SavedAnalysisSummary }
+  | { kind: 'fthb'; a: SavedFthbAnalysisSummary }
+
 function RecentCalculations() {
-  const [items, setItems] = useState<SavedAnalysisSummary[] | null>(null)
+  const [items, setItems] = useState<RecentItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    listAnalyses()
-      .then((rows) =>
-        // Server already returns most-recent-first, but be defensive in case
-        // it doesn't. Cap to 5 — a quick-resume panel, not a history page.
-        setItems(
-          [...rows]
-            .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
-            .slice(0, 5),
-        ),
-      )
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : 'Could not load saved work'
-        // 401 = not signed in (shouldn't happen here, but be safe) — show
-        // empty state instead of an error banner.
-        if (msg.includes('401')) {
-          setItems([])
-          return
+    // 401 = not signed in → treat as "no saves" rather than an error.
+    const isAuthError = (e: unknown) =>
+      e instanceof Error && e.message.includes('401')
+
+    Promise.allSettled([listAnalyses(), listFthbAnalyses()]).then(
+      ([mortgageRes, fthbRes]) => {
+        const merged: RecentItem[] = []
+
+        if (mortgageRes.status === 'fulfilled') {
+          for (const a of mortgageRes.value) merged.push({ kind: 'mortgage', a })
         }
-        setError(msg)
-      })
+        if (fthbRes.status === 'fulfilled') {
+          for (const a of fthbRes.value) merged.push({ kind: 'fthb', a })
+        }
+
+        // Surface an error only if BOTH failed for a non-auth reason —
+        // a partial failure still has something useful to show.
+        const bothFailed =
+          mortgageRes.status === 'rejected' && fthbRes.status === 'rejected'
+        if (bothFailed) {
+          const reason = mortgageRes.reason
+          if (!isAuthError(reason)) {
+            setError(
+              reason instanceof Error ? reason.message : 'Could not load saved work',
+            )
+            return
+          }
+        }
+
+        // Newest-first, capped at 6 — a quick-resume panel, not history.
+        merged.sort(
+          (x, y) => +new Date(y.a.created_at) - +new Date(x.a.created_at),
+        )
+        setItems(merged.slice(0, 6))
+      },
+    )
   }, [])
 
   return (
@@ -464,7 +499,8 @@ function RecentCalculations() {
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Recent calculations</h2>
           <p className="mt-1 text-sm text-stone-600">
-            Pick up where you left off. Saved analyses from the Mortgage Calculator.
+            Pick up where you left off. Saved analyses from the Mortgage
+            Calculator and the FTHB Decision Map.
           </p>
         </div>
       </div>
@@ -486,9 +522,13 @@ function RecentCalculations() {
 
         {items !== null && items.length > 0 && (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((a) => (
-              <SavedAnalysisCard key={a.id} a={a} />
-            ))}
+            {items.map((item) =>
+              item.kind === 'mortgage' ? (
+                <SavedAnalysisCard key={`m-${item.a.id}`} a={item.a} />
+              ) : (
+                <SavedFthbCard key={`f-${item.a.id}`} a={item.a} />
+              ),
+            )}
           </div>
         )}
       </div>
@@ -561,6 +601,62 @@ function SavedAnalysisCard({ a }: { a: SavedAnalysisSummary }) {
       <p className="mt-1 text-sm text-stone-600">{inputsLine}</p>
       <p className="mt-3 flex items-center gap-1 text-xs text-stone-500">
         <Clock className="h-3 w-3" /> Saved {ago}
+      </p>
+    </Link>
+  )
+}
+
+/** Compact "saved N ago" — shared by both saved-work card types. */
+function savedAgo(createdAt: string): string {
+  const days = Math.floor((Date.now() - +new Date(createdAt)) / 86_400_000)
+  if (days === 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days}d ago`
+  return new Date(createdAt).toLocaleDateString()
+}
+
+function SavedFthbCard({ a }: { a: SavedFthbAnalysisSummary }) {
+  // Headline = the engine's recommendation. Falls back to the label,
+  // then a generic title for older saves missing the denormalized field.
+  const headline =
+    a.best_executable_path ?? a.label ?? 'FTHB analysis'
+
+  // Inputs summary — starter/preferred prices + horizon. Mirrors the
+  // mortgage card's plain-English second line.
+  const inputsLine =
+    a.starter_home_price != null && a.preferred_home_price != null
+      ? `${formatCurrency(a.starter_home_price)} / ${formatCurrency(a.preferred_home_price)}${a.horizon_years != null ? ` · ${a.horizon_years}yr` : ''}`
+      : a.label ?? 'First-time homebuyer'
+
+  return (
+    <Link
+      to={`/fthb-decision-map?analysis=${encodeURIComponent(a.id)}`}
+      className="group block rounded-lg bg-card p-4 shadow-sm ring-1 ring-border transition-shadow hover:shadow-md"
+    >
+      <div className="flex items-center gap-2">
+        <Compass
+          className="h-4 w-4"
+          style={{ color: SCENARIO_PALETTE.blue }}
+        />
+        <span
+          className="text-xs font-semibold uppercase tracking-wide"
+          style={{ color: SCENARIO_PALETTE.blue }}
+        >
+          FTHB
+        </span>
+      </div>
+      {a.best_net_position != null && (
+        <p className="mt-2 text-xl font-bold tabular-nums">
+          {formatCurrency(a.best_net_position)}
+          <span className="ml-1 text-sm font-normal text-stone-500">
+            net position
+          </span>
+        </p>
+      )}
+      <p className="mt-1 text-sm font-medium text-stone-700">{headline}</p>
+      <p className="mt-0.5 text-sm text-stone-600">{inputsLine}</p>
+      <p className="mt-3 flex items-center gap-1 text-xs text-stone-500">
+        <Clock className="h-3 w-3" /> Saved {savedAgo(a.created_at)}
       </p>
     </Link>
   )
