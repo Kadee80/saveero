@@ -26,7 +26,7 @@
  * @example
  * <ListProperty />
  */
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDropzone } from 'react-dropzone'
 import { useForm } from 'react-hook-form'
@@ -551,13 +551,9 @@ export default function ListProperty() {
 
       <StepBar current={step} />
 
-      {/* Generating overlay */}
-      {generating && (
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Analysing photos and generating your listing…</p>
-        </div>
-      )}
+      {/* Generating overlay — staged progress so the long pipeline reads
+          as "working" rather than "hung". */}
+      {generating && <GeneratingProgress />}
 
       {!generating && (
         <>
@@ -582,6 +578,101 @@ export default function ListProperty() {
           )}
         </>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// GeneratingProgress — staged progress display for the listing pipeline.
+//
+// The backend is a single request/response — there's no event stream — so
+// this isn't *real* progress. But the pipeline's stages are fixed and
+// well-known (analyze photos → write listing → find comps → price →
+// polish), and the whole thing reliably runs ~1-2 minutes. Walking a
+// checklist on a timer + showing elapsed time sets honest expectations
+// ("here's what's happening, it takes a minute") instead of a bare
+// spinner that's indistinguishable from a hang.
+//
+// The last stage intentionally never auto-completes — it stays "in
+// progress" until the real response lands and unmounts this component.
+// ---------------------------------------------------------------------------
+
+const GENERATE_STAGES = [
+  'Analysing your photos',
+  'Detecting rooms & features',
+  'Writing the listing',
+  'Finding comparable properties',
+  'Pricing against the comps',
+  'Polishing the description',
+] as const
+
+/** How long to dwell on each stage before advancing the highlight. */
+const STAGE_DWELL_MS = 14_000
+
+function GeneratingProgress() {
+  const [activeStage, setActiveStage] = useState(0)
+  const [elapsed, setElapsed] = useState(0)
+  const startedAt = useRef(Date.now())
+
+  // Advance the highlighted stage on a timer, but stop at the last one —
+  // we don't know the real finish time, so the final stage stays active
+  // until the response unmounts this component.
+  useEffect(() => {
+    const stageTimer = setInterval(() => {
+      setActiveStage((s) => Math.min(s + 1, GENERATE_STAGES.length - 1))
+    }, STAGE_DWELL_MS)
+    const elapsedTimer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt.current) / 1000))
+    }, 1000)
+    return () => {
+      clearInterval(stageTimer)
+      clearInterval(elapsedTimer)
+    }
+  }, [])
+
+  const mins = Math.floor(elapsed / 60)
+  const secs = String(elapsed % 60).padStart(2, '0')
+
+  return (
+    <div className="flex flex-col items-center gap-6 py-16">
+      <div className="flex flex-col items-center gap-2">
+        <Loader2 className="h-9 w-9 animate-spin text-primary" />
+        <p className="text-sm font-medium">Generating your listing</p>
+        <p className="text-xs text-muted-foreground">
+          This usually takes a minute or two · {mins}:{secs} elapsed
+        </p>
+      </div>
+
+      <ol className="w-full max-w-sm space-y-2.5">
+        {GENERATE_STAGES.map((label, i) => {
+          const done = i < activeStage
+          const active = i === activeStage
+          return (
+            <li key={label} className="flex items-center gap-3 text-sm">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                {done ? (
+                  <CheckCircle className="h-5 w-5 text-primary" />
+                ) : active ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                ) : (
+                  <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+                )}
+              </span>
+              <span
+                className={
+                  done
+                    ? 'text-muted-foreground line-through decoration-muted-foreground/40'
+                    : active
+                      ? 'font-medium text-foreground'
+                      : 'text-muted-foreground/60'
+                }
+              >
+                {label}
+              </span>
+            </li>
+          )
+        })}
+      </ol>
     </div>
   )
 }

@@ -182,33 +182,76 @@ export interface ListingFormData {
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 /**
- * Generic API fetch wrapper - handles auth and error handling.
+ * Default request timeout. List/save calls are fast and should fail
+ * quickly if something is wrong; the generate call overrides this with
+ * a much larger ceiling because the pipeline legitimately runs long.
+ */
+const DEFAULT_TIMEOUT_MS = 30_000
+
+/**
+ * Timeout for POST /api/listings/generate. The pipeline chains vision
+ * analysis + multiple LLM calls (listing generation, comps search,
+ * pricing, refinement) and can legitimately take 1-2 minutes. The
+ * ceiling exists so a *truly* stuck request fails with a clear message
+ * instead of spinning forever — it's not an expectation of how long
+ * the happy path takes.
+ */
+const GENERATE_TIMEOUT_MS = 180_000
+
+/**
+ * Generic API fetch wrapper - handles auth, timeout, and error handling.
  *
  * Calls relative /api/* paths (see the module header) so the request
  * stays same-origin and rides the Vite proxy / vercel.json rewrite
  * like every other API client. Automatically adds the JWT auth header
- * from the current session. Throws an Error if the response is not 2xx.
+ * from the current session. Aborts after `timeoutMs` and throws an
+ * Error if the response is not 2xx.
  *
  * @template T - Expected response type
  * @param {string} url - Relative API path (e.g., "/api/listings/generate")
  * @param {RequestInit} init - Fetch options (method, headers, body, etc.)
+ * @param {number} timeoutMs - Abort the request after this many ms
  * @returns {Promise<T>} Parsed JSON response
- * @throws {Error} If request fails or response is not ok
+ * @throws {Error} If request fails, times out, or response is not ok
  *
  * @example
  * const result = await apiFetch<GeneratedListing>(
  *   '/api/listings/generate',
- *   { method: 'POST', body: formData }
+ *   { method: 'POST', body: formData },
+ *   GENERATE_TIMEOUT_MS,
  * )
  */
-async function apiFetch<T>(url: string, init: RequestInit): Promise<T> {
+async function apiFetch<T>(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+): Promise<T> {
   const auth = await authHeader()
   const headers: Record<string, string> = {
     ...(init.headers as Record<string, string> ?? {}),
   }
   if (auth) headers['Authorization'] = auth
 
-  const res = await fetch(url, { ...init, headers })
+  // AbortController gives us a hard ceiling so a stuck request surfaces
+  // a clear error instead of an indefinite spinner.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  let res: Response
+  try {
+    res = await fetch(url, { ...init, headers, signal: controller.signal })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(
+        `Request timed out after ${Math.round(timeoutMs / 1000)}s. ` +
+          'The server may be waking up or under load — please try again.',
+      )
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
     throw new Error(`${res.status} ${res.statusText}: ${text}`)
@@ -246,7 +289,12 @@ export const listingApi = {
     data.images.forEach(img => body.append('images', img))
     body.append('address', data.address)
     body.append('notes', data.notes)
-    return apiFetch<GeneratedListing>('/api/listings/generate', { method: 'POST', body })
+    // Long timeout — the generate pipeline is a chain of vision + LLM calls.
+    return apiFetch<GeneratedListing>(
+      '/api/listings/generate',
+      { method: 'POST', body },
+      GENERATE_TIMEOUT_MS,
+    )
   },
 
   /**
