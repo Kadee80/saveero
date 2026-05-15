@@ -21,7 +21,7 @@
  * @returns {JSX.Element} The admin CRM dashboard
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Pencil, Trash2, UserPlus, X } from 'lucide-react'
+import { Download, Pencil, Trash2, UserPlus, X } from 'lucide-react'
 import {
   adminBulkDeleteLeads,
   adminUpdateLead,
@@ -166,6 +166,59 @@ function durationLabel(iso: string): string {
   if (hours < 24) return `${hours}h`
   const days = Math.floor(hours / 24)
   return `${days}d`
+}
+
+// ---------------------------------------------------------------------------
+// CSV export — "download current view" for the outbound team. All
+// client-side: the leads list is already in memory, so there's no need
+// for a backend export endpoint.
+// ---------------------------------------------------------------------------
+
+/** RFC-4180 cell escaping — quote if the value has a comma, quote, or newline. */
+function csvCell(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+}
+
+/** Render a list of leads as a CSV string, reusing the display label maps. */
+function leadsToCsv(rows: Lead[]): string {
+  const headers = [
+    'Name', 'Email', 'Status', 'Role', 'Intent', 'Pipeline',
+    'Created', 'Last activity', 'Time in stage',
+  ]
+  const lines = [headers.map(csvCell).join(',')]
+  for (const lead of rows) {
+    const lastEntry =
+      lead.activity_log.length > 0
+        ? lead.activity_log[lead.activity_log.length - 1]
+        : null
+    const cells = [
+      lead.name ?? '',
+      lead.email ?? '',
+      STATUS_LABEL[lead.status] ?? lead.status,
+      ROLE_LABEL[lead.role],
+      INTENT_LABEL[lead.intent],
+      lead.pipeline ? (PIPELINE_LABEL[lead.pipeline] ?? lead.pipeline) : '',
+      new Date(lead.created_at).toLocaleDateString(),
+      lastEntry ? humanizeKind(lastEntry.kind) : '',
+      durationLabel(stageEnteredAt(lead)),
+    ]
+    lines.push(cells.map((c) => csvCell(String(c))).join(','))
+  }
+  // CRLF line endings — what Excel expects from a CSV.
+  return lines.join('\r\n')
+}
+
+/** Trigger a browser download of `csv` as `filename`. */
+function downloadCsv(csv: string, filename: string): void {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 // ---------------------------------------------------------------------------
@@ -409,14 +462,36 @@ export default function AdminCRM() {
     setSelected(updated)
   }
 
+  // Export the *current view* (filtered set) as a CSV download. Matches
+  // the filter-bar semantics — if a filter is active, the export is
+  // narrowed to match.
+  function handleExportCsv() {
+    const csv = leadsToCsv(filteredLeads)
+    const today = new Date().toISOString().slice(0, 10)
+    downloadCsv(csv, `saveero-leads-${today}.csv`)
+  }
+
   return (
     <>
       <div className="mx-auto max-w-7xl space-y-8 p-6 md:py-10">
-        <header>
-          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Leads</h1>
-          <p className="mt-2 text-sm text-stone-600">
-            {subtitleParts.join(' · ')}
-          </p>
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Leads</h1>
+            <p className="mt-2 text-sm text-stone-600">
+              {subtitleParts.join(' · ')}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportCsv}
+            className="shrink-0"
+          >
+            <Download className="mr-1.5 h-4 w-4" />
+            Export CSV
+            {filtersActive && ` (${filteredLeads.length})`}
+          </Button>
         </header>
 
         {/* Faceted filter bar — toggle by pipeline + intent. */}
