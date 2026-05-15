@@ -32,11 +32,12 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
 from core.auth import CurrentUser
 from core.database import get_db
+from core.notifications import notify_lead_engaged
 
 logger = logging.getLogger(__name__)
 
@@ -335,7 +336,11 @@ def update_my_lead(body: UpdateLeadRequest, user: CurrentUser) -> dict:
 # ---------------------------------------------------------------------------
 
 @router.post("/leads/me/activity", response_model=LeadOut)
-def append_activity(body: ActivityEntry, user: CurrentUser) -> dict:
+def append_activity(
+    body: ActivityEntry,
+    user: CurrentUser,
+    background_tasks: BackgroundTasks,
+) -> dict:
     """
     Append a single event to the current user's activity_log and bump
     status if appropriate:
@@ -343,6 +348,12 @@ def append_activity(body: ActivityEntry, user: CurrentUser) -> dict:
         - 'clicked_contact_*' -> at least 'engaged'
     Status never moves backwards, so a fresh run after engagement
     stays at 'engaged'.
+
+    When a lead transitions *into* 'engaged' here, an outbound webhook
+    fires (see core.notifications) so the partner team can react fast.
+    It runs as a background task — zero added latency to this request —
+    and only on the user-driven transition; an admin manually marking a
+    lead 'engaged' via the CRM doesn't notify (they already know).
     """
     db = get_db()
     user_id: str = user["sub"]
@@ -373,7 +384,17 @@ def append_activity(body: ActivityEntry, user: CurrentUser) -> dict:
     )
     if not result.data:
         raise HTTPException(500, "Failed to append activity")
-    return result.data[0]
+
+    updated = result.data[0]
+
+    # Notify on the new→engaged transition only — `updates["status"]` is
+    # set above exactly when the lead moved up the ladder this request.
+    if updates.get("status") == "engaged":
+        background_tasks.add_task(
+            notify_lead_engaged, updated, trigger_kind=body.kind
+        )
+
+    return updated
 
 
 # ---------------------------------------------------------------------------

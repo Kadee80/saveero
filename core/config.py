@@ -44,6 +44,17 @@ class Settings(BaseSettings):
     # MLS (optional — Perplexity used as fallback)
     bridge_server_key: Optional[str] = None
 
+    # CRM notifications — webhook fired when a lead enters 'engaged'.
+    # Points at a Zapier "Catch Hook" (or any webhook receiver); the
+    # destination — Slack, email, SMS, a sheet — is configured on the
+    # Zapier side so the channel can change without a code deploy.
+    # Unset → notifications are silently skipped.
+    engaged_lead_webhook_url: Optional[str] = None
+
+    # Base URL of the deployed app, used to build deep links in
+    # notification payloads (e.g. a link straight to the CRM). Optional.
+    app_base_url: Optional[str] = None
+
     # Frontend static files
     frontend_dist: str = "webapp/dist"
 
