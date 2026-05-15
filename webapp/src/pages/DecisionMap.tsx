@@ -54,9 +54,8 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { InputCollector, type WizardStep } from '@/components/InputWizard'
 import {
   DEFAULT_INPUTS,
   runAll,
@@ -109,86 +108,14 @@ const SCENARIO_CONFIG = {
 } as const
 
 // ---------------------------------------------------------------------------
-// Form state — the only thing we do to MasterInputs in the UI is represent
-// decimal rates / fractional percents as whole-number percents so users type
-// "6.7" instead of "0.067". We convert at submit time.
+// Input wizard steps — one group of fields per step. The shared InputWizard
+// component handles the percent display/store conversion (fields tagged
+// `kind: 'percent'` are stored as decimals and shown as whole numbers), so
+// the form state here is canonical MasterInputs-shaped — no toFormShape
+// juggling.
 // ---------------------------------------------------------------------------
 
-/** Fields that are stored on the backend as a decimal (0-1) but displayed as a percent. */
-const PERCENT_FIELDS = new Set<keyof MasterInputs>([
-  'current_mortgage_rate',
-  'annual_appreciation',
-  'selling_cost_pct',
-  'marginal_tax_rate',
-  'land_value_pct',
-  'refinance_rate',
-  'refinance_closing_cost_pct',
-  'new_down_payment_pct',
-  'new_mortgage_rate',
-  'purchase_closing_cost_pct',
-  'vacancy_rate',
-  'management_fee_pct',
-  'maintenance_reserve_pct',
-])
-
-/** Put a MasterInputs object into form-display shape (percents as whole numbers). */
-function toFormShape(i: MasterInputs): Record<string, number | boolean> {
-  const out: Record<string, number | boolean> = {}
-  ;(Object.keys(i) as Array<keyof MasterInputs>).forEach((k) => {
-    const v = i[k]
-    if (typeof v === 'boolean') {
-      out[k] = v
-    } else if (PERCENT_FIELDS.has(k)) {
-      out[k] = round4(v * 100)
-    } else {
-      out[k] = v
-    }
-  })
-  return out
-}
-
-/** Reverse of toFormShape — convert form values back to MasterInputs. */
-function fromFormShape(f: Record<string, number | boolean>): MasterInputs {
-  const out = {} as Record<string, number | boolean>
-  ;(Object.keys(DEFAULT_INPUTS) as Array<keyof MasterInputs>).forEach((k) => {
-    const v = f[k]
-    if (typeof v === 'boolean') {
-      out[k] = v
-    } else if (PERCENT_FIELDS.has(k)) {
-      out[k] = (Number(v) || 0) / 100
-    } else {
-      out[k] = Number(v) || 0
-    }
-  })
-  return out as unknown as MasterInputs
-}
-
-function round4(n: number): number {
-  return Math.round(n * 10000) / 10000
-}
-
-// ---------------------------------------------------------------------------
-// Input-group metadata — keeps the form definition data-driven so we don't
-// have to hand-copy 45 labels and input tags.
-// ---------------------------------------------------------------------------
-
-type FieldKind = 'money' | 'percent' | 'months' | 'years' | 'number' | 'bool'
-
-interface FieldDef {
-  key: keyof MasterInputs
-  label: string
-  kind: FieldKind
-  hint?: string
-}
-
-interface GroupDef {
-  title: string
-  icon: React.ComponentType<{ className?: string }>
-  description?: string
-  fields: FieldDef[]
-}
-
-const GROUPS: GroupDef[] = [
+const STEPS: WizardStep[] = [
   {
     title: 'Current home & mortgage',
     icon: Home,
@@ -279,69 +206,6 @@ const GROUPS: GroupDef[] = [
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function FieldInput({
-  def,
-  value,
-  onChange,
-}: {
-  def: FieldDef
-  value: number | boolean
-  onChange: (v: number | boolean) => void
-}) {
-  if (def.kind === 'bool') {
-    return (
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-input"
-          checked={Boolean(value)}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-        <span>{def.label}</span>
-      </label>
-    )
-  }
-
-  const suffix =
-    def.kind === 'percent' ? '%'
-    : def.kind === 'months' ? 'mo'
-    : def.kind === 'years' ? 'yr'
-    : def.hint || ''
-  const prefix = def.kind === 'money' ? '$' : ''
-  const step =
-    def.kind === 'percent' ? '0.01'
-    : def.kind === 'money' ? '100'
-    : '1'
-
-  return (
-    <div className="space-y-1">
-      <Label htmlFor={def.key} className="text-xs font-semibold text-stone-700">
-        {def.label}
-      </Label>
-      <div className="relative">
-        {prefix && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 text-sm">
-            {prefix}
-          </span>
-        )}
-        <Input
-          id={def.key}
-          type="number"
-          step={step}
-          className={cn(prefix && 'pl-7', suffix && 'pr-10')}
-          value={Number.isFinite(value as number) ? (value as number) : 0}
-          onChange={(e) => onChange(Number(e.target.value))}
-        />
-        {suffix && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-500">
-            {suffix}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
 
 function ScenarioLabel({ slug }: { slug: keyof ComparisonRowOut }) {
   const map: Record<keyof ComparisonRowOut, string> = {
@@ -666,28 +530,37 @@ function RentEquityCompositionChart({ result }: { result: RunAllResponse }) {
 // ---------------------------------------------------------------------------
 
 export default function DecisionMap() {
+  // Form state is canonical MasterInputs-shaped (percents as decimals).
+  // The InputWizard handles the whole-number-percent display conversion,
+  // so there's no toFormShape/fromFormShape round-trip anymore.
   const [formState, setFormState] = useState<Record<string, number | boolean>>(
-    toFormShape(DEFAULT_INPUTS),
+    { ...DEFAULT_INPUTS },
   )
   const [result, setResult] = useState<RunAllResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Wizard step — controlled here so it survives recalcs (a user who
+  // tweaked a later-step field and ran it stays on that step).
+  const [step, setStep] = useState(0)
 
-  const setField = useCallback((key: keyof MasterInputs, value: number | boolean) => {
+  const setField = useCallback((key: string, value: number | boolean) => {
     setFormState((s) => ({ ...s, [key]: value }))
   }, [])
 
   const resetDefaults = useCallback(() => {
-    setFormState(toFormShape(DEFAULT_INPUTS))
+    setFormState({ ...DEFAULT_INPUTS })
     setResult(null)
     setError(null)
+    setStep(0)
   }, [])
 
   const recalculate = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const inputs = fromFormShape(formState)
+      // formState is canonical MasterInputs-shaped — the wizard's STEPS
+      // cover exactly the MasterInputs keys, seeded from DEFAULT_INPUTS.
+      const inputs = formState as unknown as MasterInputs
       const r = await runAll(inputs)
       setResult(r)
       // CRM activity event — fires only on a successful run so failed
@@ -719,12 +592,6 @@ export default function DecisionMap() {
           <Button variant="ghost" size="sm" onClick={resetDefaults}>
             Reset to defaults
           </Button>
-          <Button onClick={recalculate} disabled={loading}>
-            <RefreshCw
-              className={cn('mr-2 h-4 w-4', loading && 'animate-spin')}
-            />
-            {loading ? 'Running…' : 'Recalculate'}
-          </Button>
         </div>
       </div>
 
@@ -737,67 +604,43 @@ export default function DecisionMap() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[420px_1fr]">
-        {/* ── Left: Inputs ── */}
-        <div className="space-y-5">
-          {GROUPS.map((g) => {
-            const Icon = g.icon
-            return (
-              <Card key={g.title}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-sm">
-                    <Icon className="h-4 w-4" />
-                    {g.title}
-                  </CardTitle>
-                  {g.description && (
-                    <CardDescription className="text-xs text-stone-600">
-                      {g.description}
-                    </CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-3">
-                  {g.fields.map((f) => (
-                    <div
-                      key={f.key}
-                      className={cn(f.kind === 'bool' && 'col-span-2')}
-                    >
-                      <FieldInput
-                        def={f}
-                        value={formState[f.key as string] ?? 0}
-                        onChange={(v) => setField(f.key, v)}
-                      />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+      {/* Inputs — collected through the shared InputCollector, which
+          picks the step wizard (default for consumers) or the dense
+          all-fields form (default for pros) and lets the user toggle. */}
+      <InputCollector
+        steps={STEPS}
+        values={formState}
+        onChange={setField}
+        onFinish={recalculate}
+        step={step}
+        onStepChange={setStep}
+        loading={loading}
+        storageKey="saveero.decisionmap.inputview"
+      />
 
-        {/* ── Right: Results ── */}
-        <div className="space-y-6">
-          {!result && !loading && (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-                <Compass className="h-8 w-8 text-stone-500" />
-                <p className="text-sm text-stone-600">
-                  Adjust the inputs on the left, then click <b>Recalculate</b> to
-                  run all five scenarios.
-                </p>
-              </CardContent>
-            </Card>
-          )}
+      {/* Results */}
+      <div className="space-y-6">
+        {!result && !loading && (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+              <Compass className="h-8 w-8 text-stone-500" />
+              <p className="text-sm text-stone-600">
+                Step through the inputs above, then click <b>Recalculate</b> to
+                run all five scenarios.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
-          {result && (
-            <>
-              <DecisionSummary result={result} />
-              <ScenarioComparisonTables result={result} />
-              <FeasibilityStrip result={result} />
-              <ScenarioDetails result={result} />
-              <AuditStrip result={result} />
-            </>
-          )}
-        </div>
+        {result && (
+          <>
+            <DecisionSummary result={result} />
+            <ScenarioComparisonTables result={result} />
+            <FeasibilityStrip result={result} />
+            <ScenarioDetails result={result} />
+            <AuditStrip result={result} />
+          </>
+        )}
       </div>
     </div>
   )
