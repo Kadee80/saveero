@@ -189,6 +189,35 @@ export default function AdminCRM() {
     error: string | null
   } | null>(null)
   const [deleting, setDeleting] = useState(false)
+  // Faceted filters. Within a facet the chips are OR'd; across facets
+  // they're AND'd; an empty facet doesn't constrain. Standard faceted
+  // filtering — the first thing influencer-style users reach for once
+  // the funnel passes ~20 leads.
+  const [pipelineFilter, setPipelineFilter] = useState<Set<string>>(new Set())
+  const [intentFilter, setIntentFilter] = useState<Set<LeadIntent>>(new Set())
+
+  function togglePipelineFilter(value: string) {
+    setPipelineFilter((prev) => {
+      const next = new Set(prev)
+      if (next.has(value)) next.delete(value)
+      else next.add(value)
+      return next
+    })
+  }
+
+  function toggleIntentFilter(value: LeadIntent) {
+    setIntentFilter((prev) => {
+      const next = new Set(prev)
+      if (next.has(value)) next.delete(value)
+      else next.add(value)
+      return next
+    })
+  }
+
+  function clearFilters() {
+    setPipelineFilter(new Set())
+    setIntentFilter(new Set())
+  }
 
   function toggleChecked(id: string) {
     setCheckedIds((prev) => {
@@ -336,6 +365,8 @@ export default function AdminCRM() {
   }
 
   // ---- Populated ----
+  // Subtitle counts always reflect the full funnel — the filter only
+  // narrows what's shown in the columns, it doesn't change the totals.
   const counts: Record<LeadStatus, number> = {
     new: 0, enriched: 0, active: 0, engaged: 0, converted: 0, lost: 0,
   }
@@ -350,6 +381,20 @@ export default function AdminCRM() {
     `${counts.converted} converted`,
     `${counts.lost} lost`,
   ]
+
+  // Apply the faceted filters. Within a facet: OR. Across facets: AND.
+  // An empty facet imposes no constraint.
+  const filtersActive = pipelineFilter.size > 0 || intentFilter.size > 0
+  const filteredLeads = filtersActive
+    ? leads.filter((l) => {
+        const pipelineOk =
+          pipelineFilter.size === 0 ||
+          (l.pipeline != null && pipelineFilter.has(l.pipeline))
+        const intentOk =
+          intentFilter.size === 0 || intentFilter.has(l.intent)
+        return pipelineOk && intentOk
+      })
+    : leads
 
   // After the drawer successfully patches a lead, the backend hands us
   // the new row. We splice it into the leads list in place so the
@@ -374,10 +419,22 @@ export default function AdminCRM() {
           </p>
         </header>
 
+        {/* Faceted filter bar — toggle by pipeline + intent. */}
+        <FilterBar
+          pipelineFilter={pipelineFilter}
+          intentFilter={intentFilter}
+          onTogglePipeline={togglePipelineFilter}
+          onToggleIntent={toggleIntentFilter}
+          onClear={clearFilters}
+          filtersActive={filtersActive}
+          shown={filteredLeads.length}
+          total={leads.length}
+        />
+
         {/* Live funnel — the four active statuses. */}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {STATUS_COLUMNS.map(({ status, label, color }) => {
-            const columnLeads = leads.filter((l) => l.status === status)
+            const columnLeads = filteredLeads.filter((l) => l.status === status)
             return (
               <KanbanColumn
                 key={status}
@@ -405,7 +462,7 @@ export default function AdminCRM() {
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             {RESOLVED_COLUMNS.map(({ status, label, color }) => {
-              const columnLeads = leads.filter((l) => l.status === status)
+              const columnLeads = filteredLeads.filter((l) => l.status === status)
               return (
                 <KanbanColumn
                   key={status}
@@ -579,6 +636,139 @@ function ConfirmDeleteDialog({
         </div>
       </div>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Filter bar — faceted filtering above the Kanban. Two facets: pipeline
+// and intent. Within a facet the chips OR together; across facets they
+// AND. An empty facet imposes no constraint. Filtering is client-side —
+// the leads list is already fully in memory.
+// ---------------------------------------------------------------------------
+
+interface FilterBarProps {
+  pipelineFilter: Set<string>
+  intentFilter: Set<LeadIntent>
+  onTogglePipeline: (value: string) => void
+  onToggleIntent: (value: LeadIntent) => void
+  onClear: () => void
+  filtersActive: boolean
+  shown: number
+  total: number
+}
+
+// The three canonical pipeline slugs, in funnel order.
+const PIPELINE_FILTER_VALUES = [
+  'financial-planner',
+  'real-estate-agent',
+  'mortgage-broker',
+] as const
+
+// All five intent values — 'unknown' included so an admin can isolate
+// leads that haven't been enriched yet.
+const INTENT_FILTER_VALUES: LeadIntent[] = [
+  'considering_move',
+  'refinance',
+  'rental_explore',
+  'curious',
+  'unknown',
+]
+
+function FilterBar({
+  pipelineFilter,
+  intentFilter,
+  onTogglePipeline,
+  onToggleIntent,
+  onClear,
+  filtersActive,
+  shown,
+  total,
+}: FilterBarProps) {
+  return (
+    <section className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-border">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        {/* Pipeline facet */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+            Pipeline
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {PIPELINE_FILTER_VALUES.map((value) => (
+              <FilterChip
+                key={value}
+                label={PIPELINE_LABEL[value] ?? value}
+                active={pipelineFilter.has(value)}
+                color={PIPELINE_COLOR[value] ?? SCENARIO_PALETTE.violet}
+                onClick={() => onTogglePipeline(value)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Intent facet */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+            Intent
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {INTENT_FILTER_VALUES.map((value) => (
+              <FilterChip
+                key={value}
+                label={INTENT_LABEL[value]}
+                active={intentFilter.has(value)}
+                color={SCENARIO_PALETTE.violet}
+                onClick={() => onToggleIntent(value)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Result count + clear — only once a filter is active. */}
+        {filtersActive && (
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-xs text-stone-500">
+              Showing {shown} of {total}
+            </span>
+            <button
+              type="button"
+              onClick={onClear}
+              className="rounded-md px-2 py-1 text-xs font-medium text-stone-600 transition-colors hover:bg-stone-100 hover:text-stone-900"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function FilterChip({
+  label,
+  active,
+  color,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  color: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+        active
+          ? 'border-transparent text-white'
+          : 'border-border bg-card text-stone-600 hover:bg-stone-50',
+      )}
+      style={active ? { backgroundColor: color } : undefined}
+    >
+      {label}
+    </button>
   )
 }
 
