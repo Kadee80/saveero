@@ -21,7 +21,7 @@
  * @returns {JSX.Element} The admin CRM dashboard
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Download, Pencil, Trash2, UserPlus, X } from 'lucide-react'
+import { Download, LayoutGrid, Pencil, Table, Trash2, UserPlus, X } from 'lucide-react'
 import {
   adminBulkDeleteLeads,
   adminUpdateLead,
@@ -248,6 +248,25 @@ export default function AdminCRM() {
   // the funnel passes ~20 leads.
   const [pipelineFilter, setPipelineFilter] = useState<Set<string>>(new Set())
   const [intentFilter, setIntentFilter] = useState<Set<LeadIntent>>(new Set())
+  // Kanban vs. flat table. Kanban is the default; the table is better
+  // for triaging large funnels. Persisted in localStorage so an admin's
+  // choice survives reloads.
+  const [viewMode, setViewMode] = useState<'kanban' | 'table'>(() => {
+    if (typeof window === 'undefined') return 'kanban'
+    return window.localStorage.getItem('saveero.crm.viewmode') === 'table'
+      ? 'table'
+      : 'kanban'
+  })
+
+  function chooseViewMode(mode: 'kanban' | 'table') {
+    setViewMode(mode)
+    try {
+      window.localStorage.setItem('saveero.crm.viewmode', mode)
+    } catch {
+      // localStorage can throw in private mode — in-memory state still
+      // updates, the choice just won't survive a reload.
+    }
+  }
 
   function togglePipelineFilter(value: string) {
     setPipelineFilter((prev) => {
@@ -481,17 +500,19 @@ export default function AdminCRM() {
               {subtitleParts.join(' · ')}
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleExportCsv}
-            className="shrink-0"
-          >
-            <Download className="mr-1.5 h-4 w-4" />
-            Export CSV
-            {filtersActive && ` (${filteredLeads.length})`}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <ViewModeToggle mode={viewMode} onChange={chooseViewMode} />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExportCsv}
+            >
+              <Download className="mr-1.5 h-4 w-4" />
+              Export CSV
+              {filtersActive && ` (${filteredLeads.length})`}
+            </Button>
+          </div>
         </header>
 
         {/* Faceted filter bar — toggle by pipeline + intent. */}
@@ -506,52 +527,63 @@ export default function AdminCRM() {
           total={leads.length}
         />
 
-        {/* Live funnel — the four active statuses. */}
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {STATUS_COLUMNS.map(({ status, label, color }) => {
-            const columnLeads = filteredLeads.filter((l) => l.status === status)
-            return (
-              <KanbanColumn
-                key={status}
-                label={label}
-                color={color}
-                leads={columnLeads}
-                onSelect={setSelected}
-                checkedIds={checkedIds}
-                onToggleCheck={toggleChecked}
-              />
-            )
-          })}
-        </div>
+        {viewMode === 'kanban' ? (
+          <>
+            {/* Live funnel — the four active statuses. */}
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {STATUS_COLUMNS.map(({ status, label, color }) => {
+                const columnLeads = filteredLeads.filter((l) => l.status === status)
+                return (
+                  <KanbanColumn
+                    key={status}
+                    label={label}
+                    color={color}
+                    leads={columnLeads}
+                    onSelect={setSelected}
+                    checkedIds={checkedIds}
+                    onToggleCheck={toggleChecked}
+                  />
+                )
+              })}
+            </div>
 
-        {/* Resolved row — terminal states reached only via admin action.
-            Visually separated by a horizontal rule + smaller eyebrow so
-            it reads as "history" rather than part of the active funnel. */}
-        <div className="space-y-4 pt-2">
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-border" />
-            <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-              Resolved
-            </span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {RESOLVED_COLUMNS.map(({ status, label, color }) => {
-              const columnLeads = filteredLeads.filter((l) => l.status === status)
-              return (
-                <KanbanColumn
-                  key={status}
-                  label={label}
-                  color={color}
-                  leads={columnLeads}
-                  onSelect={setSelected}
-                  checkedIds={checkedIds}
-                  onToggleCheck={toggleChecked}
-                />
-              )
-            })}
-          </div>
-        </div>
+            {/* Resolved row — terminal states reached only via admin action.
+                Visually separated by a horizontal rule + smaller eyebrow so
+                it reads as "history" rather than part of the active funnel. */}
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                  Resolved
+                </span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                {RESOLVED_COLUMNS.map(({ status, label, color }) => {
+                  const columnLeads = filteredLeads.filter((l) => l.status === status)
+                  return (
+                    <KanbanColumn
+                      key={status}
+                      label={label}
+                      color={color}
+                      leads={columnLeads}
+                      onSelect={setSelected}
+                      checkedIds={checkedIds}
+                      onToggleCheck={toggleChecked}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        ) : (
+          <LeadTable
+            leads={filteredLeads}
+            onSelect={setSelected}
+            checkedIds={checkedIds}
+            onToggleCheck={toggleChecked}
+          />
+        )}
       </div>
 
       {/* Floating bulk-action bar. Slides up from the bottom whenever
@@ -844,6 +876,177 @@ function FilterChip({
     >
       {label}
     </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// View-mode toggle — Kanban vs. flat table, in the page header.
+// ---------------------------------------------------------------------------
+
+function ViewModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: 'kanban' | 'table'
+  onChange: (m: 'kanban' | 'table') => void
+}) {
+  const options: Array<{ value: 'kanban' | 'table'; label: string; icon: typeof Table }> = [
+    { value: 'kanban', label: 'Kanban', icon: LayoutGrid },
+    { value: 'table', label: 'Table', icon: Table },
+  ]
+  return (
+    <div className="inline-flex rounded-md border border-border bg-card p-0.5">
+      {options.map((o) => {
+        const Icon = o.icon
+        const active = mode === o.value
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            aria-pressed={active}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+              active
+                ? 'bg-stone-900 text-white'
+                : 'text-stone-600 hover:bg-stone-50',
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Lead table — flat alternative to the Kanban. Better for triaging a
+// large funnel: every lead on one scannable surface. Reuses the same
+// data + filters; a row click opens the same drawer, and the row
+// checkbox feeds the same bulk-select state as the Kanban cards.
+// ---------------------------------------------------------------------------
+
+interface LeadTableProps {
+  leads: Lead[]
+  onSelect: (lead: Lead) => void
+  checkedIds: Set<string>
+  onToggleCheck: (id: string) => void
+}
+
+function LeadTable({ leads, onSelect, checkedIds, onToggleCheck }: LeadTableProps) {
+  if (leads.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border bg-card/40 px-6 py-12 text-center text-sm text-stone-500">
+        No leads match the current filters.
+      </div>
+    )
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-xl bg-card shadow-md ring-1 ring-border">
+      <table className="w-full text-sm">
+        <thead className="border-b border-border bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
+          <tr>
+            <th className="w-10 px-3 py-3" aria-label="Select" />
+            <th className="px-3 py-3 text-left font-semibold">Name</th>
+            <th className="px-3 py-3 text-left font-semibold">Email</th>
+            <th className="px-3 py-3 text-left font-semibold">Status</th>
+            <th className="px-3 py-3 text-left font-semibold">Role</th>
+            <th className="px-3 py-3 text-left font-semibold">Intent</th>
+            <th className="px-3 py-3 text-left font-semibold">Pipeline</th>
+            <th className="px-3 py-3 text-left font-semibold">Last activity</th>
+            <th className="px-3 py-3 text-right font-semibold">In stage</th>
+          </tr>
+        </thead>
+        <tbody>
+          {leads.map((lead) => {
+            const lastEntry =
+              lead.activity_log.length > 0
+                ? lead.activity_log[lead.activity_log.length - 1]
+                : null
+            const checked = checkedIds.has(lead.id)
+            return (
+              <tr
+                key={lead.id}
+                onClick={() => onSelect(lead)}
+                className={cn(
+                  'cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-stone-50',
+                  checked && 'bg-stone-50',
+                )}
+              >
+                <td
+                  className="px-3 py-2.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => onToggleCheck(lead.id)}
+                    aria-label={`Select ${lead.name ?? 'unnamed lead'}`}
+                    className="h-4 w-4 cursor-pointer rounded border-stone-300 accent-stone-700"
+                  />
+                </td>
+                <td className="px-3 py-2.5">
+                  <span
+                    className={cn(
+                      'font-medium',
+                      !lead.name && 'text-stone-400',
+                    )}
+                  >
+                    {lead.name || '(no name yet)'}
+                  </span>
+                </td>
+                <td className="px-3 py-2.5 text-stone-600">
+                  {lead.email ? (
+                    <a
+                      href={`mailto:${lead.email}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="underline underline-offset-2 hover:opacity-80"
+                    >
+                      {lead.email}
+                    </a>
+                  ) : (
+                    <span className="text-stone-400">—</span>
+                  )}
+                </td>
+                <td className="px-3 py-2.5">
+                  <span
+                    className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                    style={{
+                      backgroundColor: `${STATUS_COLOR[lead.status]}1a`,
+                      color: STATUS_COLOR[lead.status],
+                    }}
+                  >
+                    {STATUS_LABEL[lead.status] ?? lead.status}
+                  </span>
+                </td>
+                <td className="px-3 py-2.5 text-stone-700">
+                  {ROLE_LABEL[lead.role]}
+                </td>
+                <td className="px-3 py-2.5 text-stone-700">
+                  {INTENT_LABEL[lead.intent]}
+                </td>
+                <td className="px-3 py-2.5">
+                  {lead.pipeline ? (
+                    <PipelineChip pipeline={lead.pipeline} />
+                  ) : (
+                    <span className="text-stone-400">—</span>
+                  )}
+                </td>
+                <td className="px-3 py-2.5 text-stone-600">
+                  {lastEntry ? humanizeKind(lastEntry.kind) : '—'}
+                </td>
+                <td className="px-3 py-2.5 text-right text-stone-500">
+                  {durationLabel(stageEnteredAt(lead))}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
