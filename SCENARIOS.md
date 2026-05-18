@@ -437,3 +437,184 @@ When modifying scenario logic:
 - [ ] ARM (adjustable rate mortgage) scenarios
 - [ ] Variable rental income over time
 - [ ] Capital gains tax on appreciated home sales
+
+---
+
+# Part 2 — First-Time Homebuyer (FTHB) Engine
+
+Everything above describes the **homeowner** scenario engine — for users who
+already own a home and are deciding what to do with it. Saveero ships a
+**second, parallel engine** for users who don't own yet and are deciding
+*whether and how to buy their first home*. The two engines are deliberately
+separate.
+
+## Why a fork
+
+Per the client's architectural ask: *"This would be a separate branch from the
+homeowner branch (so at the start there should be a fork between non-homeowners
+and existing homeowners)."* The fork happens at signup via the Onboarding
+Wizard's "Do you currently own a home?" step (step 2). Answering No flags the
+lead as `first_time_buyer`; the Dashboard then routes them to
+`/fthb-decision-map` instead of `/decision-map`.
+
+The two engines share `scenarios/core.py`'s math primitives (PMT, FV-of-loan-
+balance, future-home-value with annual compounding) but otherwise live in
+parallel directories — `scenarios/` for homeowner, `scenarios/fthb/` for FTHB —
+with separate inputs, separate scenario modules, separate decision-map output
+shape, separate API routes, and separate golden tests. Do not try to
+retrofit FTHB into the homeowner engine.
+
+## The five FTHB scenarios
+
+1. **Continue Renting** — keep renting, invest the available cash, accumulate
+   savings over the comparison horizon
+2. **Buy Starter Home** — entry-priced purchase at the universal down payment,
+   default mortgage rate
+3. **Buy Preferred Home** — higher-priced "reach" purchase, same down payment
+4. **Buy with Downpayment Assistance (DPA)** — starter home + DPA, with a
+   50bps higher rate and forced repayment of the DPA principal at horizon
+5. **Delay Purchase** — wait one year, save more during the wait, reassess
+   feasibility of buying the starter
+
+The Excel source-of-truth is `VAN/FTHB_decision map.xlsx`. The engine is
+bit-for-bit golden-tested against it.
+
+## Inputs (~25 fields, single `FTHBInputs` dataclass)
+
+Defaults match the spreadsheet's Inputs sheet column B.
+
+### Financial profile
+| Input | Type | Notes |
+|---|---|---|
+| `annual_household_income` | float | Gross, before tax ($) |
+| `monthly_debt_obligations` | float | Student loans, auto, credit cards ($) |
+| `available_cash_for_purchase` | float | Total cash for down + closing ($) |
+| `universal_down_payment` | float | Single down-payment value used by every buy scenario ($) |
+| `estimated_credit_score` | int | Display-only in v1 |
+
+### Home goals
+| Input | Type | Notes |
+|---|---|---|
+| `current_monthly_rent` | float | What the user pays today ($) |
+| `starter_home_price` | float | Lower entry-point option ($) |
+| `preferred_home_price` | float | Aspirational / "reach" option ($) |
+| `horizon_years` | float | Comparison horizon used across scenarios |
+
+### System assumptions
+Mortgage rate (decimal), term (months), purchase closing cost %, property tax
+annual %, insurance annual %, monthly HOA, maintenance annual %, annual home
+appreciation, annual rent inflation, return on unspent cash, max DTI,
+post-close cushion %, minimum cushion floor, available DPA amount, delay-period
+monthly savings, take-home % of gross income.
+
+A derived field, `monthly_take_home_income`, computes
+`annual_household_income / 12 * take_home_pct` (Excel `Inputs!B34`) and feeds
+every scenario's residual-monthly-savings calculation.
+
+## The DPA mechanic (load-bearing)
+
+`Buy with Assistance` is structurally `Buy Starter Home` with three deltas.
+Each matters; the test suite asserts all three:
+
+1. **+50 bps rate premium.** The effective mortgage rate is
+   `Inputs!B17 + 0.005` for both PMT and the FV(loan) at horizon. Higher rate
+   → larger monthly payment → slower amortization → larger remaining loan
+   balance at horizon. Constant lives in `scenarios/fthb/inputs.py` as
+   `DPA_RATE_PREMIUM`.
+2. **Cash-to-close reduction.** The DPA amount (`Inputs!B30`, default $15k) is
+   subtracted from `down + closing` to get `cash_required`. This *helps* now.
+3. **Forced repayment at horizon.** The DPA principal is subtracted from net
+   equity at horizon — Excel models this as a single deduction at the end (no
+   amortization, no DPA interest accrual). Audit check #11 enforces this:
+   `B24 = B22 - B23 - Inputs!B30`.
+
+## The savings-capacity coupling (also load-bearing)
+
+The headline differentiator vs. the homeowner engine. Total net position
+includes a **third term** that propagates monthly housing cost into long-term
+wealth:
+
+```
+total_net_position
+    = equity_at_horizon
+    + future_value_of_remaining_cash
+    + projected_savings_accumulation
+```
+
+`residual_monthly_savings = monthly_take_home_income − monthly_debt − total_monthly_housing_payment`,
+and `projected_savings_accumulation` is the FV of that as a monthly annuity
+over the horizon. Higher monthly housing cost shrinks the residual which
+shrinks the future-savings term — even if equity at horizon looks good in
+isolation, the *all-in* picture can favor a cheaper path. This is the second-
+order effect Van called out in the spec email; do not simplify the engine to
+"equity vs. equity."
+
+## Decision Map output
+
+Mirrors the Excel `Outputs` sheet:
+
+- **Scenario comparison** — five rows (one per scenario) × ten columns: Net
+  Position, Monthly Cost, Residual Monthly Savings, Savings Accumulation, Cash
+  Required, Cash Remaining, DTI, Equity at Horizon, Feasibility, Risk. Delay
+  has `None` for Monthly Cost / DTI / Equity at Horizon (Excel writes "N/A").
+- **Recommendation snapshot** — Best executable path, Best net position, Best
+  monthly affordability, Best savings capacity, Lowest cash required, plus an
+  Actionable Insight string keyed off the best-executable-path label.
+
+### Known-broken recommendation logic (preserved CHECK)
+
+The Excel `Outputs!B13` cell ("Best executable path") references a
+column L ("Decision Score") that is empty / contains only "Future/TBD"
+placeholder text. The IF chain accidentally lands on the right answer via
+Excel's MAX-of-empty-cells-equals-zero behavior. The Python engine implements
+the **intended logic** — `MAXIFS(net_position, feasibility="Feasible")` then
+look up the matching scenario name — which gives the same result for the
+default inputs but won't accidentally drift if inputs change.
+
+Audit check #15 (`"Output recommendation uses savings-adjusted scores"`) is
+intentionally preserved as **CHECK** (not PASS) to mirror the spreadsheet's
+known TODO for a future per-scenario savings-adjusted score column. When that
+column is implemented in the Excel, the audit check should flip to PASS here
+too.
+
+## Compliance
+
+`tests/test_fthb_golden.py` — **124 tests**, all pinning every visible cell in
+the FTHB workbook to **$0.0001** (well inside the $0.01 compliance bar).
+Covers every input default, every scenario's computed cells, the full Decision
+Map comparison + recommendation, the audit report, and a handful of edge
+cases (zero-rate path, DPA equity invariant, etc.).
+
+## Future AI interpretation layer (NOT V1, design constraint)
+
+Van's email framed *"what is financially optimal"* vs. *"what is optimal for
+this household"* as related-but-not-identical answers. The engine answers the
+first deterministically; an AI layer eventually layers on top to weight the
+financial output against soft factors (family size, schools, WFH, commute,
+flexibility vs. permanence, risk tolerance, etc.).
+
+Architectural rule for that future build:
+- **Keep the FTHB engine pure / deterministic / golden-tested.** Don't bake
+  lifestyle weighting into it.
+- The output shape (`RunAllResponse` — 5 scenarios + decision map + audit) is
+  intentionally designed to be consumable by an LLM interpretation layer
+  without re-running the engine. Plain JSON, labeled fields, no hidden
+  internal state.
+
+## API
+
+Routes parallel to the homeowner engine, all under `/api/fthb/`:
+
+| Method | Path | Body |
+|---|---|---|
+| POST | `/api/fthb/scenarios/run` | `FTHBInputsRequest` → full engine result |
+| POST | `/api/fthb/scenarios/continue-renting` | per-scenario drill-down |
+| POST | `/api/fthb/scenarios/buy-starter` | " |
+| POST | `/api/fthb/scenarios/buy-preferred` | " |
+| POST | `/api/fthb/scenarios/buy-with-assistance` | " |
+| POST | `/api/fthb/scenarios/delay-purchase` | " |
+| POST | `/api/fthb/scenarios/decision-map` | comparison + recommendation only |
+| POST | `/api/fthb/analyses` | save a named analysis (auth required) |
+| GET | `/api/fthb/analyses` | list saved analyses, newest first (auth required) |
+| GET | `/api/fthb/analyses/{id}` | fetch one (auth required) |
+| DELETE | `/api/fthb/analyses/{id}` | delete one (auth required) |

@@ -1,21 +1,37 @@
 # Saveero
 
-A web platform that analyzes a homeowner's financial situation, models five housing scenarios, and ranks them by expected wealth outcome. Every number is derived from inputs the homeowner provides—no black boxes, no generic advice.
+A web platform that models a household's housing decisions, ranks them by
+expected wealth outcome, and routes engaged leads to partner professionals.
+Every number is derived from inputs the user provides — no black boxes, no
+generic advice. **Two parallel scenario engines** serve the two main audiences:
 
-**The five scenarios:**
+**Homeowner engine** (`/decision-map`) — for users who already own:
 1. **Stay** — keep the home and current mortgage (baseline)
 2. **Refinance** — keep the home, replace the loan at a lower rate
 3. **Sell + Buy** — sell current home and purchase a replacement
 4. **Rent Out** — convert current home to a rental
-5. **Rent Out & Buy** — retain current home as rental + simultaneously purchase new primary
+5. **Rent Out & Buy** — retain current as rental + simultaneously purchase new primary
+
+**First-time-homebuyer engine** (`/fthb-decision-map`) — for users buying their first home:
+1. **Continue Renting** — invest the cash, accumulate savings
+2. **Buy Starter Home** — entry-priced purchase at the universal down payment
+3. **Buy Preferred Home** — higher-priced "reach" purchase
+4. **Buy with Downpayment Assistance** — starter + DPA (50bps rate premium + forced repayment at horizon)
+5. **Delay Purchase** — wait one year, save more, reassess
+
+Both engines are bit-for-bit golden-tested against the client's Excel models.
 
 ## Features
 
-- **Scenario Comparison Engine** — Model all 5 housing decisions with transparent calculations
-- **Decision Map** — Get recommendations ranked by wealth outcome with feasibility checks
-- **Lead Capture** — Professional notifications when homeowners complete analysis (coming Month 2)
-- **Lead Generation** — Three customer segments: mortgage banks, realtors, financial planners
-- **Multi-tenant Branding** — White-label portal for professionals (coming Month 3)
+- **Dual scenario engines** — Homeowner (5 scenarios) and FTHB (5 scenarios), forked at signup
+- **Decision Map** — Side-by-side comparison + recommendation with feasibility checks
+- **Step-wizard input collection** — One decision per screen for consumers, with a one-click toggle to a dense all-fields form for power users (industry pros default to all-fields)
+- **Mortgage Calculator** — Live single-scenario calculator with live Fed rates
+- **Compare Scenarios** — Stack up to three financing scenarios (down payment / rate / term variants)
+- **AI listing wizard** — Photo-to-listing with vision + LLM pipeline; staged progress UI for the ~1-2 min run
+- **Save & resume** — Save named analyses; deep-link back from the Dashboard's Recent panel
+- **Admin CRM** (`/admin/crm`) — Kanban or table view of leads; faceted filtering; CSV export; bulk delete; in-drawer edit
+- **Engaged-lead webhook** — Outbound notification (Zapier Catch Hook → any channel) when a lead clicks Contact-a-partner
 
 ## Tech Stack
 
@@ -33,24 +49,27 @@ A web platform that analyzes a homeowner's financial situation, models five hous
 
 The platform is built in three layers:
 
-**1. Scenario Engine** (`scenarios/` module)
-- Pure Python, stateless, deterministic calculations
-- Models 5 housing scenarios + Decision Map + Audit trail
-- No I/O dependencies; runs in < 100ms on 45 inputs
-- See [SCENARIOS.md](./SCENARIOS.md) for detailed calculation logic
+**1. Scenario engines** — two parallel packages
+- `scenarios/` — homeowner engine (5 scenarios, ~45 inputs)
+- `scenarios/fthb/` — first-time-homebuyer engine (5 scenarios, ~25 inputs)
+- Pure Python, stateless, deterministic; both bit-for-bit golden-tested against the client's Excel models
+- See [SCENARIOS.md](./SCENARIOS.md) for detailed calculation logic (Part 1 = homeowner, Part 2 = FTHB)
 
 **2. Backend API** (FastAPI)
-- REST endpoints for scenario calculations, mortgage analysis, AI listings
-- Supabase integration for authentication and lead persistence
-- Async-first design for concurrent external API calls
+- REST endpoints for both scenario engines (`/api/scenarios/*` and `/api/fthb/scenarios/*`), mortgage analysis, AI listings, CRM lead management
+- Supabase integration for authentication and persistence (leads, mortgage analyses, FTHB analyses)
+- Outbound webhook for engaged-lead notifications (dormant unless `ENGAGED_LEAD_WEBHOOK_URL` is set)
 
 **3. Frontend** (React + Vite)
-- SPA for homeowners to input their situation and view recommendations
-- Professional dashboard for tracking generated leads
-- Real-time scenario comparison with live mortgage rates
+- SPA with persona-aware routing — Dashboard hero forks by `lead.role`
+- Shared `<InputCollector>` component for both Decision Map pages: step-wizard view (default for consumers) or dense all-fields view (default for industry pros), choice persisted in localStorage
+- Admin CRM with Kanban / table views, faceted filtering, CSV export
+
+**For end-user / user-guide writers:** Start with **[USER_FLOWS.md](./USER_FLOWS.md)** — page-by-page surface map written from the user's perspective.
 
 **For developers:** Start with **[CLAUDE.md](./CLAUDE.md)** for commands and architecture overview. Then see:
-- **[SCENARIOS.md](./SCENARIOS.md)** — Complete scenario engine documentation (formulas, logic, examples)
+- **[USER_FLOWS.md](./USER_FLOWS.md)** — Product surface map (user flows, page behaviors)
+- **[SCENARIOS.md](./SCENARIOS.md)** — Complete scenario engine documentation for both engines
 - **[BACKEND.md](./BACKEND.md)** — FastAPI architecture and API endpoints
 - **[FRONTEND.md](./FRONTEND.md)** — React SPA structure and components
 
@@ -187,6 +206,8 @@ App available at `http://localhost:5173`
 | `SUPABASE_JWT_JWK` | Public key JSON from `<supabase-url>/auth/v1/.well-known/jwks.json` |
 | `OPENROUTER_API_KEY` | OpenRouter API key |
 | `BRIDGE_SERVER_KEY` | Optional — Bridge RESO MLS API key |
+| `ENGAGED_LEAD_WEBHOOK_URL` | Optional — Zapier Catch Hook (or any webhook URL) fired when a lead enters `engaged`. Unset = notifications silently skipped. |
+| `APP_BASE_URL` | Optional — public app URL used to build CRM deep-links in the notification payload |
 
 ### Frontend (`webapp/.env`)
 
