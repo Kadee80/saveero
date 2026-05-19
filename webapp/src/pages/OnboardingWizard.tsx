@@ -104,7 +104,8 @@ interface IntentOption {
   blurb: string
 }
 
-const INTENT_OPTIONS: IntentOption[] = [
+/** Step 4 options when the user is a current homeowner. */
+const HOMEOWNER_INTENT_OPTIONS: IntentOption[] = [
   {
     value: 'considering_move',
     label: 'Considering a move',
@@ -124,6 +125,96 @@ const INTENT_OPTIONS: IntentOption[] = [
     value: 'curious',
     label: 'Just curious',
     blurb: 'Kicking the tires — no specific decision yet.',
+  },
+]
+
+/**
+ * Step 4 options when the user is a first-time buyer (per Van's feedback
+ * #1, 2026-05-18 — the homeowner-flavored options don't fit a buyer's
+ * journey).
+ */
+const FTHB_INTENT_OPTIONS: IntentOption[] = [
+  {
+    value: 'fthb_saving',
+    label: 'Saving up to buy',
+    blurb: "Building the down payment and getting the numbers in shape.",
+  },
+  {
+    value: 'fthb_pre_approved',
+    label: 'Pre-approved and looking',
+    blurb: 'Have financing lined up, actively shopping for the right home.',
+  },
+  {
+    value: 'fthb_exploring',
+    label: 'Just exploring',
+    blurb: 'Want to understand what owning vs. renting would look like for me.',
+  },
+  {
+    value: 'fthb_unsure',
+    label: 'Not sure yet',
+    blurb: "Still figuring out whether buying is the right call.",
+  },
+]
+
+/**
+ * Step 4 options when persona='pro'. Writes the new `pro_type` column —
+ * what kind of pro the user IS (vs. pipeline, which for consumers is
+ * what kind of pro they WANT to work with).
+ */
+interface ProTypeOption {
+  value: 'financial-planner' | 'real-estate-agent' | 'mortgage-broker'
+  label: string
+  blurb: string
+  icon: typeof Home
+}
+
+const PRO_TYPE_OPTIONS: ProTypeOption[] = [
+  {
+    value: 'financial-planner',
+    label: 'Financial planner',
+    blurb: 'I advise clients on holistic financial decisions.',
+    icon: DollarSign,
+  },
+  {
+    value: 'real-estate-agent',
+    label: 'Real estate agent',
+    blurb: 'I help clients buy and sell homes.',
+    icon: Building2,
+  },
+  {
+    value: 'mortgage-broker',
+    label: 'Mortgage broker',
+    blurb: 'I help clients secure financing.',
+    icon: KeyRound,
+  },
+]
+
+/**
+ * Step 5 options when persona='pro'. Writes to `intent` — captures
+ * what brought the pro to Saveero (evaluation / partnership / just
+ * looking). Useful CRM signal for the partner-team conversation later.
+ */
+interface ProPurposeOption {
+  value: Extract<LeadIntent, 'pro_evaluating' | 'pro_using_with_clients' | 'pro_curious'>
+  label: string
+  blurb: string
+}
+
+const PRO_PURPOSE_OPTIONS: ProPurposeOption[] = [
+  {
+    value: 'pro_evaluating',
+    label: 'Evaluating Saveero as a partner',
+    blurb: 'Considering working with Saveero to receive client referrals.',
+  },
+  {
+    value: 'pro_using_with_clients',
+    label: 'Tools for my clients',
+    blurb: "I'd use Saveero in my work — looking at it as a client-facing tool.",
+  },
+  {
+    value: 'pro_curious',
+    label: 'Just curious',
+    blurb: 'Wanted to see what the product looks like.',
   },
 ]
 
@@ -227,6 +318,10 @@ export default function OnboardingWizard({
         ? 'consumer'
         : null,
   )
+  // One `intent` state covers all three step-4/5 paths — homeowner
+  // intent (step 4 for consumers who own), FTHB intent (step 4 for
+  // first-time buyers), and pro purpose (step 5 for pros). All three
+  // write to the same `leads.intent` column server-side.
   const [intent, setIntent] = useState<IntentOption['value'] | null>(
     lead && lead.intent !== 'unknown'
       ? (lead.intent as IntentOption['value'])
@@ -234,6 +329,11 @@ export default function OnboardingWizard({
   )
   const [pipeline, setPipeline] = useState<PipelineOption['value'] | null>(
     (lead?.pipeline as PipelineOption['value']) ?? null,
+  )
+  // proType only matters when persona='pro'. Captured in step 4 for the
+  // pro path; writes to the dedicated `leads.pro_type` column.
+  const [proType, setProType] = useState<ProTypeOption['value'] | null>(
+    (lead?.pro_type as ProTypeOption['value']) ?? null,
   )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -270,10 +370,40 @@ export default function OnboardingWizard({
         role?: LeadRole
         intent?: LeadIntent
         pipeline?: string
+        pro_type?: string
       } = { name: trimmedName }
       if (finalRole !== null) body.role = finalRole
-      if (intent !== null) body.intent = intent
-      if (pipeline !== null) body.pipeline = pipeline
+
+      // Branched submission: pros get pro_type + intent-as-purpose;
+      // consumers get intent + (optional) pipeline. Whichever fields
+      // are set get included; the rest are omitted so the backend
+      // leaves them alone.
+      //
+      // We also gate the intent submission on whether the held value is
+      // valid for the current persona path. A user who picks 'refinance'
+      // as a consumer-homeowner, backs up, switches to pro, and finishes
+      // without picking a pro purpose would otherwise send 'refinance'
+      // for a pro — wrong. Dropping the mismatched value is the safest
+      // behavior; the user can re-pick to set it.
+      const validIntents =
+        persona === 'pro'
+          ? PRO_PURPOSE_OPTIONS.map((o) => o.value)
+          : isCurrentHomeowner === false
+            ? FTHB_INTENT_OPTIONS.map((o) => o.value)
+            : HOMEOWNER_INTENT_OPTIONS.map((o) => o.value)
+
+      if (persona === 'pro') {
+        if (proType !== null) body.pro_type = proType
+        if (intent !== null && (validIntents as string[]).includes(intent)) {
+          body.intent = intent
+        }
+      } else {
+        if (intent !== null && (validIntents as string[]).includes(intent)) {
+          body.intent = intent
+        }
+        if (pipeline !== null) body.pipeline = pipeline
+      }
+
       await updateMyLead(body)
       onComplete()
     } catch (err: unknown) {
@@ -313,8 +443,46 @@ export default function OnboardingWizard({
               />
             )}
             {step === 3 && <PersonaStep value={persona} onChange={setPersona} />}
-            {step === 4 && <IntentStep value={intent} onChange={setIntent} />}
-            {step === 5 && (
+
+            {/* Step 4 branches on persona — pros pick their pro type;
+                consumers pick an intent (FTHB or homeowner-flavored
+                depending on the homeowner-status answer). Persona unset
+                falls through to the homeowner intent set (safe default). */}
+            {step === 4 && persona === 'pro' && (
+              <ProTypeStep value={proType} onChange={setProType} />
+            )}
+            {step === 4 && persona !== 'pro' && isCurrentHomeowner === false && (
+              <IntentStep
+                value={intent}
+                onChange={setIntent}
+                options={FTHB_INTENT_OPTIONS}
+                title="Where are you in your home-buying journey?"
+                blurb="Helps us point you at the right scenarios first."
+              />
+            )}
+            {step === 4 && persona !== 'pro' && isCurrentHomeowner !== false && (
+              <IntentStep
+                value={intent}
+                onChange={setIntent}
+                options={HOMEOWNER_INTENT_OPTIONS}
+                title="What brought you in?"
+                blurb="Helps us point you at the right tool first."
+              />
+            )}
+
+            {/* Step 5 branches on persona — pros say what brought them
+                in (purpose); consumers see the (reframed, optional)
+                pipeline picker. */}
+            {step === 5 && persona === 'pro' && (
+              <IntentStep
+                value={intent}
+                onChange={setIntent}
+                options={PRO_PURPOSE_OPTIONS}
+                title="What brought you to Saveero?"
+                blurb="Helps us tailor the conversation as the partner-side experience comes online."
+              />
+            )}
+            {step === 5 && persona !== 'pro' && (
               <PipelineStep value={pipeline} onChange={setPipeline} />
             )}
           </div>
@@ -638,22 +806,29 @@ function PersonaStep({
 // Step 4 — Intent. Vertical stack of four buttons (more space for blurbs).
 // ---------------------------------------------------------------------------
 
+/**
+ * Generic intent step — used for both homeowner and FTHB consumer paths
+ * (and reused as the pro-purpose step). Caller passes the title / blurb
+ * / option set; the rendering is identical.
+ */
 function IntentStep({
   value,
   onChange,
+  options,
+  title,
+  blurb,
 }: {
   value: IntentOption['value'] | null
   onChange: (v: IntentOption['value']) => void
+  options: IntentOption[]
+  title: string
+  blurb: string
 }) {
   return (
     <section>
-      <StepHeader
-        icon={Compass}
-        title="What brought you in?"
-        blurb="Helps us point you at the right tool first."
-      />
+      <StepHeader icon={Compass} title={title} blurb={blurb} />
       <div className="mt-5 flex flex-col gap-2">
-        {INTENT_OPTIONS.map((opt) => {
+        {options.map((opt) => {
           const selected = value === opt.value
           return (
             <button
@@ -687,10 +862,79 @@ function IntentStep({
   )
 }
 
+/**
+ * Step 4 (pro path) — what kind of pro the user is. Writes the
+ * `pro_type` column. Same tile-card visual language as the consumer
+ * Pipeline step.
+ */
+function ProTypeStep({
+  value,
+  onChange,
+}: {
+  value: ProTypeOption['value'] | null
+  onChange: (v: ProTypeOption['value']) => void
+}) {
+  return (
+    <section>
+      <StepHeader
+        icon={Briefcase}
+        title="What kind of pro are you?"
+        blurb="So we can tailor the partner-side experience as it comes online."
+      />
+      <div className="mt-5 flex flex-col gap-2">
+        {PRO_TYPE_OPTIONS.map((opt) => {
+          const Icon = opt.icon
+          const selected = value === opt.value
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              aria-pressed={selected}
+              className={cn(
+                'flex items-start gap-3 rounded-lg bg-card px-4 py-3 text-left shadow-sm ring-1 transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2',
+                selected ? 'ring-2' : 'ring-border',
+              )}
+              style={
+                selected
+                  ? {
+                      boxShadow: `0 0 0 2px ${SCENARIO_PALETTE.blue}`,
+                      backgroundColor: `${SCENARIO_PALETTE.blue}10`,
+                    }
+                  : undefined
+              }
+            >
+              <div
+                className="mt-0.5 inline-flex rounded-md p-2"
+                style={{ backgroundColor: `${SCENARIO_PALETTE.blue}1a` }}
+              >
+                <Icon className="h-4 w-4" style={{ color: SCENARIO_PALETTE.blue }} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold tracking-tight">
+                  {opt.label}
+                </p>
+                <p className="mt-0.5 text-xs text-stone-600">{opt.blurb}</p>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+      <p className="mt-3 text-xs text-stone-500">Optional — Next to skip.</p>
+    </section>
+  )
+}
+
 // ---------------------------------------------------------------------------
-// Step 5 — Pipeline. The "who do you want to be matched with" choice.
-// Slugs match what the admin "Edit details" form writes so the user-side
-// wizard and admin-side enrichment land on the same set of values.
+// Step 5 (consumer path) — Pipeline. Reframed per Van's feedback #3
+// (2026-05-18): the old "Who do you want to work with?" copy read like
+// mandatory lead routing this early in the journey. Now framed as
+// optional, "when you're ready" support — the three tiles stay (so the
+// signal is captured if the user opts in) but the framing makes clear
+// that skipping is the default-good answer.
+//
+// Slugs still match what the admin "Edit details" form writes so admin
+// + user enrichment land on the same values.
 // ---------------------------------------------------------------------------
 
 function PipelineStep({
@@ -704,8 +948,8 @@ function PipelineStep({
     <section>
       <StepHeader
         icon={DollarSign}
-        title="Who do you want to work with?"
-        blurb="We'll match you with a Saveero-vetted partner when you're ready."
+        title="Want a partner to help when you’re ready?"
+        blurb="Totally optional. If you’d like a Saveero-vetted pro to reach out at some point, tell us who — otherwise skip and just use the tools."
       />
       <div className="mt-5 flex flex-col gap-2">
         {PIPELINE_OPTIONS.map((opt) => {
@@ -750,7 +994,8 @@ function PipelineStep({
         })}
       </div>
       <p className="mt-3 text-xs text-stone-500">
-        Optional — Finish to skip. You can pick later from your dashboard.
+        Just exploring? Click Finish to skip — no partner contact unless you
+        opt in later from the dashboard.
       </p>
     </section>
   )

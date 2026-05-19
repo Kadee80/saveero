@@ -61,14 +61,20 @@ class CreateLeadRequest(BaseModel):
 class UpdateLeadRequest(BaseModel):
     """Partial update — any subset of these fields can be patched.
 
-    Used by the post-signup wizard (sets role + intent) and any future
-    enrichment surfaces. Server-side status transitions are computed
-    automatically, not patched directly from the client.
+    Used by the post-signup wizard (sets role + intent + pipeline +
+    optionally pro_type) and any future enrichment surfaces. Server-side
+    status transitions are computed automatically, not patched directly
+    from the client.
     """
     name: Optional[str] = None
     role: Optional[LeadRole] = None
     intent: Optional[LeadIntent] = None
     pipeline: Optional[str] = None
+    # Only meaningful when role='pro'. Values mirror the pipeline slugs
+    # (financial-planner / real-estate-agent / mortgage-broker) — it's
+    # what kind of pro the user IS, vs. pipeline which (for consumers) is
+    # what kind of pro the user wants to work with.
+    pro_type: Optional[str] = None
 
 
 class ActivityEntry(BaseModel):
@@ -84,6 +90,7 @@ class LeadOut(BaseModel):
     role: LeadRole
     intent: LeadIntent
     pipeline: Optional[str] = None
+    pro_type: Optional[str] = None
     status: LeadStatus
     activity_log: List[dict]
     created_at: str
@@ -298,7 +305,7 @@ def update_my_lead(body: UpdateLeadRequest, user: CurrentUser) -> dict:
         raise HTTPException(404, "No lead row for current user — create it via POST /api/leads")
 
     updates: dict[str, Any] = {}
-    for field in ("name", "role", "intent", "pipeline"):
+    for field in ("name", "role", "intent", "pipeline", "pro_type"):
         v = getattr(body, field)
         if v is not None:
             updates[field] = v
@@ -473,6 +480,7 @@ class AdminPatchLeadRequest(BaseModel):
     name: Optional[str] = None
     role: Optional[LeadRole] = None
     intent: Optional[LeadIntent] = None
+    pro_type: Optional[str] = None
     pipeline: Optional[str] = None
 
 
@@ -501,7 +509,7 @@ def admin_patch_lead(
     existing = existing_rows[0]
 
     updates: dict[str, Any] = {}
-    for field in ("name", "role", "intent", "pipeline"):
+    for field in ("name", "role", "intent", "pipeline", "pro_type"):
         v = getattr(body, field)
         if v is not None:
             updates[field] = v

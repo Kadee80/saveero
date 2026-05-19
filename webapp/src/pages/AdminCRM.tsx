@@ -84,11 +84,21 @@ const ROLE_LABEL: Record<LeadRole, string> = {
 }
 
 const INTENT_LABEL: Record<LeadIntent, string> = {
-  considering_move: 'Considering a move',
-  refinance:        'Refinance',
-  rental_explore:   'Exploring renting',
-  curious:          'Curious',
-  unknown:          'Unknown intent',
+  // Current-homeowner consumer intents
+  considering_move:       'Considering a move',
+  refinance:              'Refinance',
+  rental_explore:         'Exploring renting',
+  curious:                'Curious',
+  // First-time-buyer consumer intents
+  fthb_saving:            'Saving up to buy',
+  fthb_pre_approved:      'Pre-approved, looking',
+  fthb_exploring:         'Just exploring',
+  fthb_unsure:            'Not sure yet',
+  // Industry-pro purposes
+  pro_evaluating:         'Evaluating as a partner',
+  pro_using_with_clients: 'Tools for my clients',
+  pro_curious:            'Just curious (pro)',
+  unknown:                'Unknown intent',
 }
 
 // Keys are the canonical long-form slugs written by both the user-side
@@ -771,13 +781,24 @@ const PIPELINE_FILTER_VALUES = [
   'mortgage-broker',
 ] as const
 
-// All five intent values — 'unknown' included so an admin can isolate
+// Every intent value the wizard can produce — grouped by audience so the
+// chips read coherently. 'unknown' last so admins can quickly isolate
 // leads that haven't been enriched yet.
 const INTENT_FILTER_VALUES: LeadIntent[] = [
+  // Current-homeowner consumer
   'considering_move',
   'refinance',
   'rental_explore',
   'curious',
+  // First-time buyer
+  'fthb_saving',
+  'fthb_pre_approved',
+  'fthb_exploring',
+  'fthb_unsure',
+  // Industry pro
+  'pro_evaluating',
+  'pro_using_with_clients',
+  'pro_curious',
   'unknown',
 ]
 
@@ -1383,11 +1404,21 @@ const ROLE_OPTIONS: { value: LeadRole; label: string }[] = [
 ]
 
 const INTENT_OPTIONS: { value: LeadIntent; label: string }[] = [
-  { value: 'considering_move', label: 'Considering a move' },
-  { value: 'refinance',        label: 'Refinance' },
-  { value: 'rental_explore',   label: 'Exploring renting' },
-  { value: 'curious',          label: 'Curious' },
-  { value: 'unknown',          label: 'Unknown' },
+  // Current-homeowner consumer
+  { value: 'considering_move',       label: 'Considering a move' },
+  { value: 'refinance',              label: 'Refinance' },
+  { value: 'rental_explore',         label: 'Exploring renting' },
+  { value: 'curious',                label: 'Curious' },
+  // First-time buyer
+  { value: 'fthb_saving',            label: 'Saving up to buy' },
+  { value: 'fthb_pre_approved',      label: 'Pre-approved, looking' },
+  { value: 'fthb_exploring',         label: 'Just exploring' },
+  { value: 'fthb_unsure',            label: 'Not sure yet' },
+  // Industry pro
+  { value: 'pro_evaluating',         label: 'Evaluating as a partner' },
+  { value: 'pro_using_with_clients', label: 'Tools for my clients' },
+  { value: 'pro_curious',            label: 'Just curious (pro)' },
+  { value: 'unknown',                label: 'Unknown' },
 ]
 
 // Empty-string sentinel for "no pipeline" — <select> values are

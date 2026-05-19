@@ -22,10 +22,22 @@ import { authHeader } from '@/api/auth'
 export type LeadRole = 'homeowner' | 'first_time_buyer' | 'pro' | 'unknown'
 
 export type LeadIntent =
+  // Current-homeowner consumer intents
   | 'considering_move'
   | 'refinance'
   | 'rental_explore'
   | 'curious'
+  // First-time-buyer consumer intents (added 2026-05-18)
+  | 'fthb_saving'
+  | 'fthb_pre_approved'
+  | 'fthb_exploring'
+  | 'fthb_unsure'
+  // Industry-pro purposes (added 2026-05-18 — captured in the same field
+  // since the wizard's "what brings you in" step shows pro-specific
+  // options when persona='pro')
+  | 'pro_evaluating'
+  | 'pro_using_with_clients'
+  | 'pro_curious'
   | 'unknown'
 
 export type LeadStatus =
@@ -50,6 +62,13 @@ export interface Lead {
   role: LeadRole
   intent: LeadIntent
   pipeline: string | null
+  /**
+   * Only meaningful when role='pro'. The kind of pro the user IS
+   * (financial-planner / real-estate-agent / mortgage-broker). Distinct
+   * from `pipeline` which (for consumers) is the kind of pro they want
+   * to work with.
+   */
+  pro_type: string | null
   status: LeadStatus
   activity_log: ActivityLogEntry[]
   created_at: string
@@ -79,6 +98,8 @@ export interface UpdateLeadRequest {
   role?: LeadRole
   intent?: LeadIntent
   pipeline?: string
+  /** Only sent when role='pro' — what kind of pro the user is. */
+  pro_type?: string
 }
 
 export interface AppendActivityRequest {
@@ -209,6 +230,7 @@ export interface AdminPatchLeadRequest {
   role?: LeadRole
   intent?: LeadIntent
   pipeline?: string
+  pro_type?: string
 }
 
 /**
