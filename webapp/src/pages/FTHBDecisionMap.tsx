@@ -44,6 +44,7 @@ import {
   Save,
   Sparkles,
   TrendingUp,
+  Trophy,
   Wallet,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -334,12 +335,44 @@ export default function FTHBDecisionMap() {
 // Recommendation snapshot card — Outputs!B12-B18 in the spreadsheet.
 // ---------------------------------------------------------------------------
 
+/**
+ * Animate a number counting up from 0 to `target` over `durationMs`.
+ * Resets and re-runs whenever `target` changes (i.e. on every recalc),
+ * so the hero number always lands with a little dopamine kick. Uses an
+ * ease-out curve so the last 20% reads as "settling in" rather than
+ * abrupt stop. No dependency — just rAF.
+ */
+function useCountUp(target: number, durationMs = 900): number {
+  const [value, setValue] = useState(0)
+  useEffect(() => {
+    if (!Number.isFinite(target) || target <= 0) {
+      setValue(target)
+      return
+    }
+    let raf = 0
+    const startedAt = performance.now()
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - startedAt) / durationMs)
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3)
+      setValue(target * eased)
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, durationMs])
+  return value
+}
+
 function RecommendationCard({
   recommendation,
 }: {
   recommendation: RunAllResponse['decision_map']['recommendation']
 }) {
   const bestMeta = metaFor(recommendation.best_executable_path)
+  // Hero number animates up on first reveal + on every recalc — sets the
+  // "aha" tone Van asked for in the post-demo feedback.
+  const animatedNetPosition = useCountUp(recommendation.best_net_position)
 
   return (
     <section
@@ -355,16 +388,32 @@ function RecommendationCard({
           Recommendation
         </span>
       </div>
+
       <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">
         Best executable path:{' '}
         <span style={{ color: bestMeta.color }}>
           {recommendation.best_executable_path}
         </span>
+        <Trophy
+          className="ml-2 inline h-6 w-6 align-text-bottom md:h-7 md:w-7"
+          style={{ color: SCENARIO_PALETTE.amber }}
+          aria-label="Best executable path"
+        />
       </h2>
-      <p className="mt-2 text-sm text-stone-600">
-        Net position at horizon:{' '}
-        <strong>{formatCurrency(recommendation.best_net_position)}</strong>
-      </p>
+
+      {/* Hero net-position number — the dopamine moment. Bigger, tabular
+          for clean digit alignment, animated up from 0 on each recalc. */}
+      <div className="mt-5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+          Net position at horizon
+        </p>
+        <p
+          className="mt-1 text-4xl font-extrabold tracking-tight tabular-nums md:text-5xl"
+          style={{ color: bestMeta.color }}
+        >
+          {formatCurrency(animatedNetPosition)}
+        </p>
+      </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <RecPick
@@ -501,7 +550,71 @@ function SaveBar({
 // Comparison table — Outputs sheet rows 5-9.
 // ---------------------------------------------------------------------------
 
+/**
+ * Find the index of the row that "wins" a metric. Pass an extractor that
+ * returns the metric value (or null/undefined to exclude a row from
+ * consideration — e.g. Delay has no monthly_cost). Direction picks
+ * max-wins or min-wins. Returns -1 if no row is eligible.
+ */
+function winnerIndex<T>(
+  rows: T[],
+  extract: (r: T) => number | null | undefined,
+  direction: 'max' | 'min',
+): number {
+  let bestIdx = -1
+  let bestVal: number | null = null
+  rows.forEach((r, i) => {
+    const v = extract(r)
+    if (v === null || v === undefined) return
+    if (bestVal === null) {
+      bestVal = v
+      bestIdx = i
+      return
+    }
+    if (direction === 'max' ? v > bestVal : v < bestVal) {
+      bestVal = v
+      bestIdx = i
+    }
+  })
+  return bestIdx
+}
+
+/** Inline trophy badge — gold-tinted, sits next to a winning value. */
+function TrophyBadge({ title }: { title: string }) {
+  return (
+    <Trophy
+      className="ml-1.5 inline h-3.5 w-3.5 align-text-bottom"
+      style={{ color: SCENARIO_PALETTE.amber }}
+      aria-label={title}
+    />
+  )
+}
+
 function ComparisonTable({ rows }: { rows: ScenarioComparisonRowOut[] }) {
+  // Per-column winners. Feasible-only for net position (the headline
+  // metric — we don't crown an infeasible scenario "best"). Other
+  // columns are open to all rows that have a meaningful value.
+  const feasibleRows = rows.map((r) => (r.feasibility === 'Feasible' ? r : null))
+  const bestNetPositionIdx = winnerIndex(
+    feasibleRows,
+    (r) => r?.net_position ?? null,
+    'max',
+  )
+  const bestMonthlyIdx = winnerIndex(rows, (r) => r.monthly_cost, 'min')
+  const bestResidualIdx = winnerIndex(rows, (r) => r.residual_monthly_savings, 'max')
+  // Cash Required: lowest among rows that actually require any cash
+  // (Delay = 0; Continue Renting = 0 — meaningless to crown them).
+  const bestCashIdx = winnerIndex(
+    rows,
+    (r) => (r.cash_required > 0 ? r.cash_required : null),
+    'min',
+  )
+  const bestEquityIdx = winnerIndex(
+    rows,
+    (r) => (r.equity_at_horizon > 0 ? r.equity_at_horizon : null),
+    'max',
+  )
+
   return (
     <section className="overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border">
       <header className="border-b border-border bg-stone-50/40 px-6 py-4">
@@ -510,7 +623,7 @@ function ComparisonTable({ rows }: { rows: ScenarioComparisonRowOut[] }) {
         </h2>
         <p className="mt-1 text-xs text-stone-500">
           Net position = equity at horizon + future value of remaining cash
-          + projected savings accumulation.
+          + projected savings accumulation. <Trophy className="inline h-3 w-3 align-text-bottom" style={{ color: SCENARIO_PALETTE.amber }} /> marks the leader in each column.
         </p>
       </header>
       <div className="overflow-x-auto">
@@ -528,10 +641,19 @@ function ComparisonTable({ rows }: { rows: ScenarioComparisonRowOut[] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {rows.map((row, i) => {
               const meta = metaFor(row.scenario)
+              const isOverallWinner = i === bestNetPositionIdx
               return (
-                <tr key={row.scenario} className="border-t border-border">
+                <tr
+                  key={row.scenario}
+                  className="border-t border-border"
+                  style={
+                    isOverallWinner
+                      ? { backgroundColor: `${meta.color}0d` }
+                      : undefined
+                  }
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span
@@ -539,26 +661,71 @@ function ComparisonTable({ rows }: { rows: ScenarioComparisonRowOut[] }) {
                         className="inline-block h-2.5 w-2.5 rounded-full"
                         style={{ backgroundColor: meta.color }}
                       />
-                      <span className="font-medium">{row.scenario}</span>
+                      <span
+                        className={cn('font-medium', isOverallWinner && 'font-bold')}
+                        style={isOverallWinner ? { color: meta.color } : undefined}
+                      >
+                        {row.scenario}
+                      </span>
+                      {isOverallWinner && (
+                        <span
+                          className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                          style={{
+                            backgroundColor: `${meta.color}1f`,
+                            color: meta.color,
+                          }}
+                        >
+                          Best
+                        </span>
+                      )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold">
+                  <td
+                    className={cn(
+                      'px-4 py-3 text-right font-semibold tabular-nums',
+                      i === bestNetPositionIdx && 'font-bold',
+                    )}
+                    style={i === bestNetPositionIdx ? { color: meta.color } : undefined}
+                  >
                     {formatCurrency(row.net_position)}
+                    {i === bestNetPositionIdx && <TrophyBadge title="Highest net position (feasible)" />}
                   </td>
-                  <td className="px-4 py-3 text-right text-stone-700">
+                  <td
+                    className={cn(
+                      'px-4 py-3 text-right tabular-nums',
+                      i === bestMonthlyIdx ? 'font-bold' : 'text-stone-700',
+                    )}
+                  >
                     {row.monthly_cost === null
                       ? <span className="text-stone-400">—</span>
-                      : formatCurrency(row.monthly_cost)}
+                      : <>{formatCurrency(row.monthly_cost)}{i === bestMonthlyIdx && <TrophyBadge title="Lowest monthly cost" />}</>}
                   </td>
-                  <td className="px-4 py-3 text-right text-stone-700">
+                  <td
+                    className={cn(
+                      'px-4 py-3 text-right tabular-nums',
+                      i === bestResidualIdx ? 'font-bold' : 'text-stone-700',
+                    )}
+                  >
                     {formatCurrency(row.residual_monthly_savings)}
+                    {i === bestResidualIdx && <TrophyBadge title="Highest residual monthly savings" />}
                   </td>
-                  <td className="px-4 py-3 text-right text-stone-700">
+                  <td
+                    className={cn(
+                      'px-4 py-3 text-right tabular-nums',
+                      i === bestCashIdx ? 'font-bold' : 'text-stone-700',
+                    )}
+                  >
                     {formatCurrency(row.cash_required)}
+                    {i === bestCashIdx && <TrophyBadge title="Lowest cash required" />}
                   </td>
-                  <td className="px-4 py-3 text-right text-stone-700">
+                  <td
+                    className={cn(
+                      'px-4 py-3 text-right tabular-nums',
+                      i === bestEquityIdx ? 'font-bold' : 'text-stone-700',
+                    )}
+                  >
                     {row.equity_at_horizon > 0
-                      ? formatCurrency(row.equity_at_horizon)
+                      ? <>{formatCurrency(row.equity_at_horizon)}{i === bestEquityIdx && <TrophyBadge title="Highest equity at horizon" />}</>
                       : <span className="text-stone-400">—</span>}
                   </td>
                   <td className="px-4 py-3">
