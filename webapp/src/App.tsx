@@ -5,6 +5,10 @@ import type { Session } from '@supabase/supabase-js'
 import { cn } from '@/lib/utils'
 import { supabase, signOut } from '@/api/auth'
 import { createLead, getMyProfile } from '@/api/leadsApi'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { Button } from '@/components/ui/button'
+import { readAnonStash, clearAnonStash } from '@/api/anonStash'
+import { saveFthbAnalysis } from '@/api/fthbApi'
 import Dashboard from './pages/Dashboard'
 import ListProperty from './pages/ListProperty'
 import MortgageCalculator from './pages/MortgageCalculator'
@@ -95,6 +99,46 @@ export default function App() {
     })
   }, [session?.user.id])
 
+  // Anonymous-stash replay — if the user just signed up after running the
+  // calculator anonymously, persist that calculation as their first
+  // saved scenario. Mirrors the lead-seed effect: fires once per session
+  // crossover, swallows errors, runs only after the lead row has been
+  // upserted so the FK on fthb_analyses.user_id always resolves.
+  //
+  // Only FTHB has a save endpoint today; homeowner DecisionMap doesn't
+  // persist analyses server-side. If we later add /api/scenarios/analyses
+  // this is where the 'homeowner_decision' branch slots in.
+  useEffect(() => {
+    if (!session) return
+    const stash = readAnonStash()
+    if (!stash) return
+    if (stash.kind !== 'fthb_decision') {
+      // Nothing to replay server-side; just drop it so it doesn't linger.
+      clearAnonStash()
+      return
+    }
+    // Slight delay so createLead's POST (above) has time to land — the
+    // backend's _ensure_user_row in /api/fthb/analyses handles the race
+    // either way, but ordering reduces a noisy duplicate-row warning.
+    const t = window.setTimeout(() => {
+      saveFthbAnalysis({
+        label: 'My first scenario',
+        // Cast: stash payload is opaque Record<string, unknown> by design.
+        // The save endpoint treats inputs/result as JSON blobs.
+        inputs: stash.inputs as unknown as Parameters<typeof saveFthbAnalysis>[0]['inputs'],
+        result: stash.result as unknown as Parameters<typeof saveFthbAnalysis>[0]['result'],
+      })
+        .then(() => clearAnonStash())
+        .catch((err) => {
+          console.warn('[anon-replay] failed:', err)
+          // Leave the stash in place — user can retry from the Recent
+          // panel if they want, and a transient 401 on the first call
+          // (token not yet attached) shouldn't lose their work.
+        })
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [session?.user.id])
+
   // Admin probe — runs once per signed-in session. Cheap GET against
   // the user's own row (was listAllLeads, which on a cold Render dyno
   // could be a 100KB+ payload that blocked the user's parallel /leads/me
@@ -128,37 +172,68 @@ export default function App() {
     )
   }
 
-  // Not logged in — public surface: marketing landing at /, auth at /login.
-  // Any other path (including bookmarked deep links to authed pages) sends
-  // the visitor to /login so they land somewhere actionable instead of a
-  // 404, then the deep link can be re-followed once they sign in.
+  // Not logged in — public surface: marketing landing at /, auth at
+  // /login, plus the two decision-map calculators which were carved out
+  // of the auth wall (Van's #5 — let users see the value before being
+  // asked to commit). The calculator routes render the same components
+  // as the authed app, but inside an `AnonymousShell` chrome (top bar
+  // with Sign in / Get started CTAs) instead of the full sidebar.
+  //
+  // Anonymous behavior inside the calculators:
+  //   - Engine calls succeed (the backend /api/scenarios/* and
+  //     /api/fthb/scenarios/* endpoints are public)
+  //   - trackActivity / save endpoints swallow the auth failure
+  //   - The pages render a SignupPrompt where the auth-only affordances
+  //     would normally live (Save bar, etc.)
+  //
+  // The TooltipProvider wraps this branch too so tooltips on the
+  // calculator pages keep working pre-auth.
   //
   // Feature flag: VITE_LANDING_ENABLED. Defaults to enabled. Set to "false"
-  // (e.g. in Vercel env vars) to fall back to the old behavior of dropping
-  // every unauthenticated visitor straight onto the Login form. Useful if
-  // we need to temporarily pull the public marketing page without reverting
-  // code (e.g. a copy issue, or running a closed-beta period).
+  // to fall back to the old behavior of dropping every unauthenticated
+  // visitor straight onto the Login form. Useful if we need to temporarily
+  // pull the public marketing page without reverting code.
   if (session === null) {
     const landingEnabled = import.meta.env.VITE_LANDING_ENABLED !== 'false'
-    // Suspense fallback is just the cream background — Landing's chunk is
-    // small enough to typically resolve in well under a second, and a
-    // blank cream pane reads as "loading" without flashing heavy chrome.
     return (
-      <Suspense fallback={<div className="min-h-screen bg-background" />}>
-        <Routes>
-          {landingEnabled && <Route path="/" element={<Landing />} />}
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="*"
-            element={landingEnabled ? <Navigate to="/login" replace /> : <Login />}
-          />
-        </Routes>
-      </Suspense>
+      <TooltipProvider delayDuration={150}>
+        <Suspense fallback={<div className="min-h-screen bg-background" />}>
+          <Routes>
+            {landingEnabled && <Route path="/" element={<Landing />} />}
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/decision-map"
+              element={
+                <AnonymousShell>
+                  <DecisionMap />
+                </AnonymousShell>
+              }
+            />
+            <Route
+              path="/fthb-decision-map"
+              element={
+                <AnonymousShell>
+                  <FTHBDecisionMap />
+                </AnonymousShell>
+              }
+            />
+            <Route
+              path="*"
+              element={landingEnabled ? <Navigate to="/login" replace /> : <Login />}
+            />
+          </Routes>
+        </Suspense>
+      </TooltipProvider>
     )
   }
 
-  // Logged in — show the full app
+  // Logged in — show the full app. TooltipProvider wraps the whole authed
+  // surface so any descendant can render Radix tooltips without re-mounting
+  // a provider locally. delayDuration tuned for "intentional hover" — the
+  // help affordances are deliberate (?) icons, not hidden meaning under
+  // labels, so we want them snappy.
   return (
+    <TooltipProvider delayDuration={150}>
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
       <aside
@@ -267,6 +342,39 @@ export default function App() {
           Saveero © {new Date().getFullYear()}
         </footer>
       </main>
+    </div>
+    </TooltipProvider>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// AnonymousShell — lightweight chrome for anonymous users running the
+// calculator pages. Top bar with logo + Sign in / Get started CTAs; no
+// sidebar (no Recent Calculations, no admin, no list-property — those are
+// all auth-only surfaces). The calculator page itself decides what to do
+// with its auth-gated affordances (Save bar, contact-a-pro buttons) by
+// detecting `session === null` via the API helpers' "Not signed in" throws.
+// ---------------------------------------------------------------------------
+
+function AnonymousShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
+          <Link to="/" className="text-lg font-bold tracking-tight">
+            Saveero
+          </Link>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/login?mode=signin">Sign in</Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link to="/login?mode=signup">Get started</Link>
+            </Button>
+          </div>
+        </div>
+      </header>
+      <main>{children}</main>
     </div>
   )
 }

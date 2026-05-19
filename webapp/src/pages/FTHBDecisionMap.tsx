@@ -52,6 +52,10 @@ import { cn, formatCurrency } from '@/lib/utils'
 import { SCENARIO_PALETTE } from '@/lib/chartPalette'
 import { trackActivity } from '@/api/leadsApi'
 import { InputCollector, type WizardStep } from '@/components/InputWizard'
+import { HelpTip } from '@/components/HelpTip'
+import { SignupPrompt } from '@/components/SignupPrompt'
+import { useSession } from '@/api/auth'
+import { stashAnonRun } from '@/api/anonStash'
 import {
   DEFAULT_FTHB_INPUTS,
   getFthbAnalysis,
@@ -126,11 +130,11 @@ const FTHB_STEPS: WizardStep[] = [
     icon: Wallet,
     description: 'Income, debts, and the cash you have to work with.',
     fields: [
-      { key: 'annual_household_income',     label: 'Annual household income', kind: 'money', hint: 'Gross — before tax.' },
-      { key: 'monthly_debt_obligations',    label: 'Monthly debt obligations', kind: 'money', hint: 'Student loans, auto, credit cards.' },
-      { key: 'available_cash_for_purchase', label: 'Available cash for purchase', kind: 'money', hint: 'Total cash for down + closing.' },
-      { key: 'universal_down_payment',      label: 'Down payment used', kind: 'money', hint: 'Same down payment for every buy scenario.' },
-      { key: 'estimated_credit_score',      label: 'Estimated credit score', kind: 'number', hint: 'Used for product/pricing context.' },
+      { key: 'annual_household_income',     label: 'Annual household income', kind: 'money', hint: 'Gross — before tax.', help: 'fthb.input.annual_household_income' },
+      { key: 'monthly_debt_obligations',    label: 'Monthly debt obligations', kind: 'money', hint: 'Student loans, auto, credit cards.', help: 'fthb.input.monthly_debt_obligations' },
+      { key: 'available_cash_for_purchase', label: 'Available cash for purchase', kind: 'money', hint: 'Total cash for down + closing.', help: 'fthb.input.available_cash_for_purchase' },
+      { key: 'universal_down_payment',      label: 'Down payment used', kind: 'money', hint: 'Same down payment for every buy scenario.', help: 'fthb.input.universal_down_payment' },
+      { key: 'estimated_credit_score',      label: 'Estimated credit score', kind: 'number', hint: 'Used for product/pricing context.', help: 'fthb.input.estimated_credit_score' },
     ],
   },
   {
@@ -138,10 +142,10 @@ const FTHB_STEPS: WizardStep[] = [
     icon: Home,
     description: 'What you pay in rent today and the price points you’re weighing.',
     fields: [
-      { key: 'current_monthly_rent', label: 'Current monthly rent', kind: 'money', hint: 'What you pay today.' },
-      { key: 'starter_home_price',   label: 'Starter home target price', kind: 'money', hint: 'Lower entry-point option.' },
-      { key: 'preferred_home_price', label: 'Preferred home target price', kind: 'money', hint: 'Aspirational / "reach" option.' },
-      { key: 'horizon_years',        label: 'Comparison horizon', kind: 'years', hint: 'How long you plan to stay.' },
+      { key: 'current_monthly_rent', label: 'Current monthly rent', kind: 'money', hint: 'What you pay today.', help: 'fthb.input.current_monthly_rent' },
+      { key: 'starter_home_price',   label: 'Starter home target price', kind: 'money', hint: 'Lower entry-point option.', help: 'fthb.input.starter_home_price' },
+      { key: 'preferred_home_price', label: 'Preferred home target price', kind: 'money', hint: 'Aspirational / "reach" option.', help: 'fthb.input.preferred_home_price' },
+      { key: 'horizon_years',        label: 'Comparison horizon', kind: 'years', hint: 'How long you plan to stay.', help: 'fthb.input.horizon_years' },
     ],
   },
   {
@@ -149,8 +153,8 @@ const FTHB_STEPS: WizardStep[] = [
     icon: Percent,
     description: 'Pre-filled to the model defaults — tweak only what you want to override.',
     fields: [
-      { key: 'mortgage_rate',        label: 'Mortgage interest rate', kind: 'percent', hint: 'Standard financing rate.' },
-      { key: 'mortgage_term_months', label: 'Mortgage term', kind: 'months', hint: 'Amortization period.' },
+      { key: 'mortgage_rate',        label: 'Mortgage interest rate', kind: 'percent', hint: 'Standard financing rate.', help: 'fthb.input.mortgage_rate' },
+      { key: 'mortgage_term_months', label: 'Mortgage term', kind: 'months', hint: 'Amortization period.', help: 'fthb.input.mortgage_term_months' },
     ],
   },
   {
@@ -158,11 +162,11 @@ const FTHB_STEPS: WizardStep[] = [
     icon: Receipt,
     description: 'Closing, carrying, and upkeep assumptions.',
     fields: [
-      { key: 'purchase_closing_cost_pct', label: 'Purchase closing cost', kind: 'percent', hint: '% of purchase price.' },
-      { key: 'property_tax_annual_pct',   label: 'Property tax (annual)', kind: 'percent', hint: '% of home value per year.' },
-      { key: 'insurance_annual_pct',      label: 'Insurance (annual)', kind: 'percent', hint: '% of home value per year.' },
-      { key: 'monthly_hoa',               label: 'Monthly HOA', kind: 'money', hint: 'Condo / association fee.' },
-      { key: 'maintenance_annual_pct',    label: 'Maintenance reserve (annual)', kind: 'percent', hint: '% of home value per year.' },
+      { key: 'purchase_closing_cost_pct', label: 'Purchase closing cost', kind: 'percent', hint: '% of purchase price.', help: 'fthb.input.purchase_closing_cost_pct' },
+      { key: 'property_tax_annual_pct',   label: 'Property tax (annual)', kind: 'percent', hint: '% of home value per year.', help: 'fthb.input.property_tax_annual_pct' },
+      { key: 'insurance_annual_pct',      label: 'Insurance (annual)', kind: 'percent', hint: '% of home value per year.', help: 'fthb.input.insurance_annual_pct' },
+      { key: 'monthly_hoa',               label: 'Monthly HOA', kind: 'money', hint: 'Condo / association fee.', help: 'fthb.input.monthly_hoa' },
+      { key: 'maintenance_annual_pct',    label: 'Maintenance reserve (annual)', kind: 'percent', hint: '% of home value per year.', help: 'fthb.input.maintenance_annual_pct' },
     ],
   },
   {
@@ -170,10 +174,10 @@ const FTHB_STEPS: WizardStep[] = [
     icon: TrendingUp,
     description: 'How home value, rent, and cash grow over the horizon.',
     fields: [
-      { key: 'annual_home_appreciation', label: 'Annual home appreciation', kind: 'percent', hint: 'Home value growth rate.' },
-      { key: 'annual_rent_inflation',    label: 'Annual rent inflation', kind: 'percent', hint: 'Rent growth rate.' },
-      { key: 'return_on_unspent_cash',   label: 'Return on unspent cash', kind: 'percent', hint: 'Growth rate on cash not used to buy.' },
-      { key: 'take_home_pct',            label: 'Take-home % of gross income', kind: 'percent', hint: 'Gross-to-take-home haircut.' },
+      { key: 'annual_home_appreciation', label: 'Annual home appreciation', kind: 'percent', hint: 'Home value growth rate.', help: 'fthb.input.annual_home_appreciation' },
+      { key: 'annual_rent_inflation',    label: 'Annual rent inflation', kind: 'percent', hint: 'Rent growth rate.', help: 'fthb.input.annual_rent_inflation' },
+      { key: 'return_on_unspent_cash',   label: 'Return on unspent cash', kind: 'percent', hint: 'Growth rate on cash not used to buy.', help: 'fthb.input.return_on_unspent_cash' },
+      { key: 'take_home_pct',            label: 'Take-home % of gross income', kind: 'percent', hint: 'Gross-to-take-home haircut.', help: 'fthb.input.take_home_pct' },
     ],
   },
   {
@@ -181,11 +185,11 @@ const FTHB_STEPS: WizardStep[] = [
     icon: Compass,
     description: 'Lender limits, liquidity cushions, and downpayment assistance.',
     fields: [
-      { key: 'max_dti',                label: 'Max DTI allowed', kind: 'percent', hint: 'Lender debt-to-income ceiling.' },
-      { key: 'post_close_cushion_pct', label: 'Post-close cushion', kind: 'percent', hint: '% of cash kept as a liquidity warning threshold.' },
-      { key: 'min_post_close_cushion', label: 'Minimum cash cushion', kind: 'money', hint: 'Dollar floor for the cushion check.' },
-      { key: 'available_dpa',          label: 'Downpayment assistance', kind: 'money', hint: 'Repayable DPA amount.' },
-      { key: 'delay_monthly_savings',  label: 'Delay scenario monthly savings', kind: 'money', hint: 'Extra saved each month during the 12-month delay.' },
+      { key: 'max_dti',                label: 'Max DTI allowed', kind: 'percent', hint: 'Lender debt-to-income ceiling.', help: 'fthb.input.max_dti' },
+      { key: 'post_close_cushion_pct', label: 'Post-close cushion', kind: 'percent', hint: '% of cash kept as a liquidity warning threshold.', help: 'fthb.input.post_close_cushion_pct' },
+      { key: 'min_post_close_cushion', label: 'Minimum cash cushion', kind: 'money', hint: 'Dollar floor for the cushion check.', help: 'fthb.input.min_post_close_cushion' },
+      { key: 'available_dpa',          label: 'Downpayment assistance', kind: 'money', hint: 'Repayable DPA amount.', help: 'fthb.input.available_dpa' },
+      { key: 'delay_monthly_savings',  label: 'Delay scenario monthly savings', kind: 'money', hint: 'Extra saved each month during the 12-month delay.', help: 'fthb.input.delay_monthly_savings' },
     ],
   },
 ]
@@ -203,6 +207,10 @@ export default function FTHBDecisionMap() {
   // across recalcs so a user who tweaked a later-step field and ran it
   // stays on that step rather than getting bounced to step 1.
   const [step, setStep] = useState(0)
+  // Anonymous-mode awareness — swaps the SaveBar for a SignupPrompt and
+  // stashes runs to localStorage for post-signup replay (see App.tsx).
+  const session = useSession()
+  const isAnonymous = session === null
 
   // ?analysis=<id> deep-link from the Dashboard's "Recent calculations"
   // panel: load that saved analysis instead of running defaults.
@@ -240,10 +248,21 @@ export default function FTHBDecisionMap() {
       const r = await runAllFthb(next)
       setResult(r)
       // CRM activity tag — same convention as the homeowner engine
-      // ('ran_*' bumps lead status to 'active').
+      // ('ran_*' bumps lead status to 'active'). No-ops silently for
+      // anonymous users via trackActivity's "Not signed in" swallow.
       trackActivity('ran_fthb_decision_map', {
         best: r.decision_map.recommendation.best_executable_path,
       })
+      // Anonymous: stash the run so a subsequent signup gets it replayed
+      // as the user's first saved FTHB analysis (App.tsx handles the
+      // replay against /api/fthb/analyses).
+      if (isAnonymous) {
+        stashAnonRun({
+          kind: 'fthb_decision',
+          inputs: next as unknown as Record<string, unknown>,
+          result: r as unknown as Record<string, unknown>,
+        })
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not run engine'
       setError(msg)
@@ -251,6 +270,22 @@ export default function FTHBDecisionMap() {
       setLoading(false)
     }
   }
+
+  // Late-resolving anonymity backstop. The initial recalc(inputs) on
+  // mount runs before Supabase has had a chance to resolve the session
+  // (session === undefined). If the user turns out to be anonymous,
+  // re-stash whatever result is on screen the moment we know. Without
+  // this, an anonymous visitor who arrives, sees the auto-run results,
+  // and signs up without editing anything would lose those results on
+  // signup replay.
+  useEffect(() => {
+    if (!isAnonymous || !result) return
+    stashAnonRun({
+      kind: 'fthb_decision',
+      inputs: inputs as unknown as Record<string, unknown>,
+      result: result as unknown as Record<string, unknown>,
+    })
+  }, [isAnonymous, result])
 
   // Loose signature so it satisfies InputCollector's onChange contract.
   // Keys are always FTHBInputs keys in practice (they come from FTHB_STEPS).
@@ -315,7 +350,20 @@ export default function FTHBDecisionMap() {
       {result && (
         <>
           <RecommendationCard recommendation={result.decision_map.recommendation} />
-          <SaveBar inputs={inputs} result={result} />
+          {/* SaveBar requires auth (POSTs to /api/fthb/analyses). For
+              anonymous users we swap in a SignupPrompt — the stash they
+              already wrote on Recalculate gets replayed at signup, so
+              the scenario lands in their account as soon as they
+              create one. */}
+          {isAnonymous ? (
+            <SignupPrompt
+              variant="action"
+              title="Save this scenario"
+              body="We'll keep what you just ran — it'll be in your account the moment you sign up."
+            />
+          ) : (
+            <SaveBar inputs={inputs} result={result} />
+          )}
           <ComparisonTable rows={result.decision_map.comparison} />
           <ScenarioDetailGrid result={result} />
         </>
@@ -631,13 +679,48 @@ function ComparisonTable({ rows }: { rows: ScenarioComparisonRowOut[] }) {
           <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
             <tr>
               <th className="px-4 py-3 text-left font-semibold">Scenario</th>
-              <th className="px-4 py-3 text-right font-semibold">Net Position</th>
-              <th className="px-4 py-3 text-right font-semibold">Monthly Cost</th>
-              <th className="px-4 py-3 text-right font-semibold">Residual Savings/mo</th>
-              <th className="px-4 py-3 text-right font-semibold">Cash Required</th>
-              <th className="px-4 py-3 text-right font-semibold">Equity at Horizon</th>
-              <th className="px-4 py-3 text-left font-semibold">Feasibility</th>
-              <th className="px-4 py-3 text-left font-semibold">Risk</th>
+              <th className="px-4 py-3 text-right font-semibold">
+                <span className="inline-flex items-center justify-end gap-1.5">
+                  Net Position
+                  <HelpTip slug="fthb.compare.net_position" />
+                </span>
+              </th>
+              <th className="px-4 py-3 text-right font-semibold">
+                <span className="inline-flex items-center justify-end gap-1.5">
+                  Monthly Cost
+                  <HelpTip slug="fthb.compare.monthly_cost" />
+                </span>
+              </th>
+              <th className="px-4 py-3 text-right font-semibold">
+                <span className="inline-flex items-center justify-end gap-1.5">
+                  Residual Savings/mo
+                  <HelpTip slug="fthb.compare.residual_savings" />
+                </span>
+              </th>
+              <th className="px-4 py-3 text-right font-semibold">
+                <span className="inline-flex items-center justify-end gap-1.5">
+                  Cash Required
+                  <HelpTip slug="fthb.compare.cash_required" />
+                </span>
+              </th>
+              <th className="px-4 py-3 text-right font-semibold">
+                <span className="inline-flex items-center justify-end gap-1.5">
+                  Equity at Horizon
+                  <HelpTip slug="fthb.compare.equity_at_horizon" />
+                </span>
+              </th>
+              <th className="px-4 py-3 text-left font-semibold">
+                <span className="inline-flex items-center gap-1.5">
+                  Feasibility
+                  <HelpTip slug="fthb.compare.feasibility" />
+                </span>
+              </th>
+              <th className="px-4 py-3 text-left font-semibold">
+                <span className="inline-flex items-center gap-1.5">
+                  Risk
+                  <HelpTip slug="fthb.compare.risk" />
+                </span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -838,11 +921,21 @@ function DetailCard({
   )
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({
+  label,
+  value,
+  help,
+}: {
+  label: string
+  value: string
+  /** Tooltip slug into @/copy/tooltips. */
+  help?: string
+}) {
   return (
     <>
-      <dt className="text-xs font-medium uppercase tracking-wide text-stone-500">
+      <dt className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
         {label}
+        {help && <HelpTip slug={help} />}
       </dt>
       <dd className="text-right font-medium text-stone-800">{value}</dd>
     </>
@@ -852,11 +945,11 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 function RentingDetail({ r }: { r: RunAllResponse['continue_renting'] }) {
   return (
     <DetailCard name="Continue Renting">
-      <DetailRow label="Cumulative rent paid" value={formatCurrency(r.cumulative_rent_paid)} />
-      <DetailRow label="FV of available cash" value={formatCurrency(r.future_value_of_available_cash)} />
-      <DetailRow label="Residual savings/mo" value={formatCurrency(r.residual_monthly_savings)} />
-      <DetailRow label="Savings accumulation" value={formatCurrency(r.projected_savings_accumulation)} />
-      <DetailRow label="Total net position" value={formatCurrency(r.total_net_position)} />
+      <DetailRow label="Cumulative rent paid" value={formatCurrency(r.cumulative_rent_paid)} help="fthb.detail.cumulative_rent_paid" />
+      <DetailRow label="FV of available cash" value={formatCurrency(r.future_value_of_available_cash)} help="fthb.detail.fv_available_cash" />
+      <DetailRow label="Residual savings/mo" value={formatCurrency(r.residual_monthly_savings)} help="fthb.detail.residual_savings" />
+      <DetailRow label="Savings accumulation" value={formatCurrency(r.projected_savings_accumulation)} help="fthb.detail.projected_savings_accumulation" />
+      <DetailRow label="Total net position" value={formatCurrency(r.total_net_position)} help="fthb.detail.total_net_position" />
     </DetailCard>
   )
 }
@@ -872,14 +965,14 @@ function BuyDetail({
 }) {
   return (
     <DetailCard name={name} note={note}>
-      <DetailRow label="Cash to close" value={formatCurrency(r.total_cash_required_at_close)} />
-      <DetailRow label="Loan amount" value={formatCurrency(r.new_loan_amount)} />
-      <DetailRow label="Monthly P&I" value={formatCurrency(r.monthly_principal_and_interest)} />
-      <DetailRow label="All-in monthly" value={formatCurrency(r.total_monthly_housing_payment)} />
-      <DetailRow label="DTI" value={`${(r.dti * 100).toFixed(1)}%`} />
-      <DetailRow label="Equity at horizon" value={formatCurrency(r.net_equity_at_horizon)} />
-      <DetailRow label="Residual savings/mo" value={formatCurrency(r.residual_monthly_savings)} />
-      <DetailRow label="Total net position" value={formatCurrency(r.total_net_position)} />
+      <DetailRow label="Cash to close" value={formatCurrency(r.total_cash_required_at_close)} help="fthb.detail.cash_to_close" />
+      <DetailRow label="Loan amount" value={formatCurrency(r.new_loan_amount)} help="fthb.detail.loan_amount" />
+      <DetailRow label="Monthly P&I" value={formatCurrency(r.monthly_principal_and_interest)} help="fthb.detail.monthly_pi" />
+      <DetailRow label="All-in monthly" value={formatCurrency(r.total_monthly_housing_payment)} help="fthb.detail.all_in_monthly" />
+      <DetailRow label="DTI" value={`${(r.dti * 100).toFixed(1)}%`} help="fthb.detail.dti" />
+      <DetailRow label="Equity at horizon" value={formatCurrency(r.net_equity_at_horizon)} help="fthb.detail.equity_at_horizon" />
+      <DetailRow label="Residual savings/mo" value={formatCurrency(r.residual_monthly_savings)} help="fthb.detail.residual_savings" />
+      <DetailRow label="Total net position" value={formatCurrency(r.total_net_position)} help="fthb.detail.total_net_position" />
     </DetailCard>
   )
 }
@@ -887,11 +980,11 @@ function BuyDetail({
 function DelayDetail({ r }: { r: RunAllResponse['delay_purchase'] }) {
   return (
     <DetailCard name="Delay Purchase" note={`${r.recommended_delay_months}-month wait`}>
-      <DetailRow label="Extra savings during wait" value={formatCurrency(r.projected_additional_savings)} />
-      <DetailRow label="Cash after delay" value={formatCurrency(r.projected_available_cash_after_delay)} />
-      <DetailRow label="Surplus vs. starter" value={formatCurrency(r.projected_cash_surplus_or_shortfall)} />
-      <DetailRow label="Residual savings/mo" value={formatCurrency(r.residual_monthly_savings_while_renting)} />
-      <DetailRow label="Future net position" value={formatCurrency(r.total_net_position)} />
+      <DetailRow label="Extra savings during wait" value={formatCurrency(r.projected_additional_savings)} help="fthb.detail.extra_savings_wait" />
+      <DetailRow label="Cash after delay" value={formatCurrency(r.projected_available_cash_after_delay)} help="fthb.detail.cash_after_delay" />
+      <DetailRow label="Surplus vs. starter" value={formatCurrency(r.projected_cash_surplus_or_shortfall)} help="fthb.detail.surplus_vs_starter" />
+      <DetailRow label="Residual savings/mo" value={formatCurrency(r.residual_monthly_savings_while_renting)} help="fthb.detail.residual_savings" />
+      <DetailRow label="Future net position" value={formatCurrency(r.total_net_position)} help="fthb.detail.future_net_position" />
     </DetailCard>
   )
 }

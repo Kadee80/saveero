@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { getMyLead } from '@/api/leadsApi'
+import { HelpTip } from '@/components/HelpTip'
 
 // ---------------------------------------------------------------------------
 // Public types — consumers build their `steps` from these.
@@ -59,6 +60,13 @@ export interface FieldDef {
   kind: FieldKind
   /** Optional one-line helper rendered under the field. */
   hint?: string
+  /**
+   * Optional tooltip slug into @/copy/tooltips. When set, a "?" affordance
+   * is rendered next to the label that surfaces plain-English help on
+   * hover/focus/tap. Unknown slugs render nothing — safe to add slugs
+   * before the copy exists.
+   */
+  help?: string
 }
 
 /** Icon component shape — lucide-react icons satisfy this (className + style). */
@@ -284,15 +292,18 @@ function FieldControl({
 }) {
   if (def.kind === 'bool') {
     return (
-      <label className="flex items-center gap-2 self-end pb-2 text-sm">
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-input"
-          checked={Boolean(value)}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-        <span>{def.label}</span>
-      </label>
+      <div className="flex items-center gap-2 self-end pb-2 text-sm">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-input"
+            checked={Boolean(value)}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+          <span>{def.label}</span>
+        </label>
+        {def.help && <HelpTip slug={def.help} />}
+      </div>
     )
   }
 
@@ -316,9 +327,12 @@ function FieldControl({
 
   return (
     <div className="space-y-1">
-      <Label htmlFor={def.key} className="text-xs font-semibold text-stone-700">
-        {def.label}
-      </Label>
+      <div className="flex items-center gap-1.5">
+        <Label htmlFor={def.key} className="text-xs font-semibold text-stone-700">
+          {def.label}
+        </Label>
+        {def.help && <HelpTip slug={def.help} />}
+      </div>
       <div className="relative">
         {prefix && (
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-500">

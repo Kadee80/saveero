@@ -28,6 +28,7 @@
  * fetch('/api/listings', { headers: { Authorization: auth ?? '' } })
  */
 import { createClient, type Session, type User } from '@supabase/supabase-js';
+import { useEffect, useState } from 'react';
 
 const supabaseUrl  = import.meta.env.VITE_SUPABASE_URL  as string;
 const supabaseAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -158,4 +159,38 @@ export async function getUser(): Promise<User | null> {
 export async function authHeader(): Promise<string | null> {
   const session = await getSession();
   return session ? `Bearer ${session.access_token}` : null;
+}
+
+/**
+ * React hook returning the current Supabase session, kept in sync with
+ * auth-state changes. Used by pages that need to branch UI on whether the
+ * user is signed in (e.g. anonymous-mode calculators showing a SignupPrompt
+ * in place of the Save bar).
+ *
+ * Returns:
+ *   - undefined  — initial load (don't render auth-dependent UI yet)
+ *   - null       — anonymous (no session)
+ *   - Session    — signed in
+ *
+ * The triple state matches App.tsx's session state machine, so callers can
+ * use the same `=== null` / `=== undefined` patterns.
+ */
+export function useSession(): Session | null | undefined {
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
+
+  useEffect(() => {
+    let mounted = true;
+    getSession().then((s) => {
+      if (mounted) setSession(s);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
+      if (mounted) setSession(s);
+    });
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  return session;
 }

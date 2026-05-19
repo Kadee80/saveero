@@ -1,1 +1,7 @@
 .vercel
+
+# Vite writes ephemeral compiled-config files next to vite.config.ts during
+# dev/build (named vite.config.ts.timestamp-<ts>-<hash>.mjs). They're meant
+# to be cleaned up automatically but sometimes linger when the dev server
+# crashes or runs inside a sandbox without unlink permissions.
+vite.config.ts.timestamp-*.mjs

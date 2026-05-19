@@ -196,12 +196,19 @@ export async function getMyProfile(): Promise<MyProfile> {
  * — it swallows network failures and never throws, so a flaky CRM call
  * can never block the workflow it's tagging along on.
  *
+ * Anonymous users hit the "Not signed in" guard in appendActivity; we
+ * swallow that case silently rather than warning (Van's #5 — calculator
+ * pages are intentionally usable signed-out, so a CRM-tracking warning
+ * on every Recalculate would be noise). Other failures still log.
+ *
  * Example:
  *   trackActivity('ran_decision_map')
  *   trackActivity('clicked_contact_financial_planner', { from: 'recommendation' })
  */
 export function trackActivity(kind: string, data?: Record<string, unknown>): void {
   appendActivity({ kind, data }).catch((err) => {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg === 'Not signed in') return
     console.warn(`[lead] activity '${kind}' failed:`, err)
   })
 }

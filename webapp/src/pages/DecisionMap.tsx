@@ -18,7 +18,7 @@
  *   - Renders Decision Map + 5 scenario detail cards + Audit strip.
  *   - No NPV / no sliders / no charts — deferred to post-V1.
  */
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   RefreshCw,
   AlertCircle,
@@ -30,6 +30,7 @@ import {
   KeyRound,
   PiggyBank,
   Compass,
+  Trophy,
 } from 'lucide-react'
 import {
   BarChart,
@@ -69,6 +70,10 @@ import {
   TOOLTIP_STYLE,
 } from '@/lib/chartPalette'
 import { trackActivity } from '@/api/leadsApi'
+import { HelpTip } from '@/components/HelpTip'
+import { SignupPrompt } from '@/components/SignupPrompt'
+import { useSession } from '@/api/auth'
+import { stashAnonRun } from '@/api/anonStash'
 
 // ---------------------------------------------------------------------------
 // Scenario colors and metadata
@@ -121,38 +126,39 @@ const STEPS: WizardStep[] = [
     icon: Home,
     description: 'What you own today.',
     fields: [
-      { key: 'hold_years', label: 'Hold period', kind: 'years' },
-      { key: 'current_home_value', label: 'Current home value', kind: 'money' },
-      { key: 'current_mortgage_balance', label: 'Mortgage balance', kind: 'money' },
-      { key: 'current_mortgage_rate', label: 'Mortgage rate', kind: 'percent' },
-      { key: 'remaining_term_months', label: 'Remaining term', kind: 'months' },
-      { key: 'monthly_property_tax', label: 'Property tax', kind: 'money', hint: '/mo' },
-      { key: 'monthly_insurance', label: 'Insurance', kind: 'money', hint: '/mo' },
-      { key: 'monthly_hoa', label: 'HOA', kind: 'money', hint: '/mo' },
-      { key: 'monthly_maintenance', label: 'Maintenance', kind: 'money', hint: '/mo' },
+      { key: 'hold_years', label: 'Hold period', kind: 'years', help: 'decisionmap.input.hold_years' },
+      { key: 'current_home_value', label: 'Current home value', kind: 'money', help: 'decisionmap.input.current_home_value' },
+      { key: 'current_mortgage_balance', label: 'Mortgage balance', kind: 'money', help: 'decisionmap.input.current_mortgage_balance' },
+      { key: 'current_mortgage_rate', label: 'Mortgage rate', kind: 'percent', help: 'decisionmap.input.current_mortgage_rate' },
+      { key: 'remaining_term_months', label: 'Remaining term', kind: 'months', help: 'decisionmap.input.remaining_term_months' },
+      { key: 'monthly_property_tax', label: 'Property tax', kind: 'money', hint: '/mo', help: 'decisionmap.input.monthly_property_tax' },
+      { key: 'monthly_insurance', label: 'Insurance', kind: 'money', hint: '/mo', help: 'decisionmap.input.monthly_insurance' },
+      { key: 'monthly_hoa', label: 'HOA', kind: 'money', hint: '/mo', help: 'decisionmap.input.monthly_hoa' },
+      { key: 'monthly_maintenance', label: 'Maintenance', kind: 'money', hint: '/mo', help: 'decisionmap.input.monthly_maintenance' },
     ],
   },
   {
     title: 'Market & tax assumptions',
     icon: TrendingUp,
     fields: [
-      { key: 'annual_appreciation', label: 'Home appreciation', kind: 'percent', hint: '/yr' },
-      { key: 'selling_cost_pct', label: 'Selling costs', kind: 'percent', hint: 'of price' },
-      { key: 'marginal_tax_rate', label: 'Marginal tax rate', kind: 'percent' },
-      { key: 'land_value_pct', label: 'Land value', kind: 'percent', hint: 'of basis (non-depreciable)' },
+      { key: 'annual_appreciation', label: 'Home appreciation', kind: 'percent', hint: '/yr', help: 'decisionmap.input.annual_appreciation' },
+      { key: 'selling_cost_pct', label: 'Selling costs', kind: 'percent', hint: 'of price', help: 'decisionmap.input.selling_cost_pct' },
+      { key: 'marginal_tax_rate', label: 'Marginal tax rate', kind: 'percent', help: 'decisionmap.input.marginal_tax_rate' },
+      { key: 'land_value_pct', label: 'Land value', kind: 'percent', hint: 'of basis (non-depreciable)', help: 'decisionmap.input.land_value_pct' },
     ],
   },
   {
     title: 'Refinance terms',
     icon: Banknote,
     fields: [
-      { key: 'refinance_rate', label: 'Refi rate', kind: 'percent' },
-      { key: 'refinance_term_months', label: 'Refi term', kind: 'months' },
-      { key: 'refinance_closing_cost_pct', label: 'Closing costs', kind: 'percent', hint: 'of new loan' },
+      { key: 'refinance_rate', label: 'Refi rate', kind: 'percent', help: 'decisionmap.input.refinance_rate' },
+      { key: 'refinance_term_months', label: 'Refi term', kind: 'months', help: 'decisionmap.input.refinance_term_months' },
+      { key: 'refinance_closing_cost_pct', label: 'Closing costs', kind: 'percent', hint: 'of new loan', help: 'decisionmap.input.refinance_closing_cost_pct' },
       {
         key: 'refinance_closing_costs_financed',
         label: 'Finance closing costs?',
         kind: 'bool',
+        help: 'decisionmap.input.refinance_closing_costs_financed',
       },
     ],
   },
@@ -160,13 +166,13 @@ const STEPS: WizardStep[] = [
     title: 'Purchase of new home',
     icon: Building2,
     fields: [
-      { key: 'target_new_home_value', label: 'New home price', kind: 'money' },
-      { key: 'new_down_payment_pct', label: 'Down payment', kind: 'percent' },
-      { key: 'new_mortgage_rate', label: 'New mortgage rate', kind: 'percent' },
-      { key: 'new_mortgage_term_months', label: 'New term', kind: 'months' },
-      { key: 'purchase_closing_cost_pct', label: 'Closing costs', kind: 'percent', hint: 'of price' },
-      { key: 'moving_cost', label: 'Moving cost', kind: 'money' },
-      { key: 'cash_reserve_held_back', label: 'Cash reserve held back', kind: 'money' },
+      { key: 'target_new_home_value', label: 'New home price', kind: 'money', help: 'decisionmap.input.target_new_home_value' },
+      { key: 'new_down_payment_pct', label: 'Down payment', kind: 'percent', help: 'decisionmap.input.new_down_payment_pct' },
+      { key: 'new_mortgage_rate', label: 'New mortgage rate', kind: 'percent', help: 'decisionmap.input.new_mortgage_rate' },
+      { key: 'new_mortgage_term_months', label: 'New term', kind: 'months', help: 'decisionmap.input.new_mortgage_term_months' },
+      { key: 'purchase_closing_cost_pct', label: 'Closing costs', kind: 'percent', hint: 'of price', help: 'decisionmap.input.purchase_closing_cost_pct' },
+      { key: 'moving_cost', label: 'Moving cost', kind: 'money', help: 'decisionmap.input.moving_cost' },
+      { key: 'cash_reserve_held_back', label: 'Cash reserve held back', kind: 'money', help: 'decisionmap.input.cash_reserve_held_back' },
     ],
   },
   {
@@ -174,10 +180,10 @@ const STEPS: WizardStep[] = [
     icon: KeyRound,
     description: 'Used by Sell & Buy and Rent Out & Buy.',
     fields: [
-      { key: 'new_home_monthly_property_tax', label: 'Property tax', kind: 'money', hint: '/mo' },
-      { key: 'new_home_monthly_insurance', label: 'Insurance', kind: 'money', hint: '/mo' },
-      { key: 'new_home_monthly_hoa', label: 'HOA', kind: 'money', hint: '/mo' },
-      { key: 'new_home_monthly_maintenance', label: 'Maintenance', kind: 'money', hint: '/mo' },
+      { key: 'new_home_monthly_property_tax', label: 'Property tax', kind: 'money', hint: '/mo', help: 'decisionmap.input.new_home_monthly_property_tax' },
+      { key: 'new_home_monthly_insurance', label: 'Insurance', kind: 'money', hint: '/mo', help: 'decisionmap.input.new_home_monthly_insurance' },
+      { key: 'new_home_monthly_hoa', label: 'HOA', kind: 'money', hint: '/mo', help: 'decisionmap.input.new_home_monthly_hoa' },
+      { key: 'new_home_monthly_maintenance', label: 'Maintenance', kind: 'money', hint: '/mo', help: 'decisionmap.input.new_home_monthly_maintenance' },
     ],
   },
   {
@@ -185,12 +191,12 @@ const STEPS: WizardStep[] = [
     icon: PiggyBank,
     description: 'If you rent the current home.',
     fields: [
-      { key: 'gross_monthly_rent', label: 'Gross rent', kind: 'money', hint: '/mo' },
-      { key: 'vacancy_rate', label: 'Vacancy', kind: 'percent' },
-      { key: 'management_fee_pct', label: 'Management fee', kind: 'percent', hint: 'of rent' },
-      { key: 'maintenance_reserve_pct', label: 'Maintenance reserve', kind: 'percent', hint: 'of rent' },
-      { key: 'other_rental_expense_monthly', label: 'Other expenses', kind: 'money', hint: '/mo' },
-      { key: 'make_ready_cost', label: 'Make-ready cost', kind: 'money', hint: 'one-time' },
+      { key: 'gross_monthly_rent', label: 'Gross rent', kind: 'money', hint: '/mo', help: 'decisionmap.input.gross_monthly_rent' },
+      { key: 'vacancy_rate', label: 'Vacancy', kind: 'percent', help: 'decisionmap.input.vacancy_rate' },
+      { key: 'management_fee_pct', label: 'Management fee', kind: 'percent', hint: 'of rent', help: 'decisionmap.input.management_fee_pct' },
+      { key: 'maintenance_reserve_pct', label: 'Maintenance reserve', kind: 'percent', hint: 'of rent', help: 'decisionmap.input.maintenance_reserve_pct' },
+      { key: 'other_rental_expense_monthly', label: 'Other expenses', kind: 'money', hint: '/mo', help: 'decisionmap.input.other_rental_expense_monthly' },
+      { key: 'make_ready_cost', label: 'Make-ready cost', kind: 'money', hint: 'one-time', help: 'decisionmap.input.make_ready_cost' },
     ],
   },
   {
@@ -198,7 +204,7 @@ const STEPS: WizardStep[] = [
     icon: Compass,
     description: 'Caps how aggressive a Rent Out & Buy plan can be.',
     fields: [
-      { key: 'available_cash_for_purchase', label: 'Cash available for next purchase', kind: 'money' },
+      { key: 'available_cash_for_purchase', label: 'Cash available for next purchase', kind: 'money', help: 'decisionmap.input.available_cash_for_purchase' },
     ],
   },
 ]
@@ -206,6 +212,43 @@ const STEPS: WizardStep[] = [
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+/**
+ * Hero count-up animation for the headline net-position number. Pure
+ * requestAnimationFrame with ease-out cubic — no library dep — re-runs on
+ * every recalc since `target` changes. Mirrors the FTHB version so the
+ * "winning" feeling is consistent across both engines.
+ */
+function useCountUp(target: number, durationMs = 900): number {
+  const [value, setValue] = useState(0)
+  useEffect(() => {
+    if (!Number.isFinite(target) || target <= 0) {
+      setValue(target)
+      return
+    }
+    let raf = 0
+    const startedAt = performance.now()
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - startedAt) / durationMs)
+      const eased = 1 - Math.pow(1 - t, 3)
+      setValue(target * eased)
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, durationMs])
+  return value
+}
+
+/** Small inline gold trophy badge used to mark winning cells/scenarios. */
+function TrophyBadge({ className }: { className?: string }) {
+  return (
+    <Trophy
+      className={cn('inline-block h-3.5 w-3.5 text-amber-500', className)}
+      aria-label="best"
+    />
+  )
+}
 
 function ScenarioLabel({ slug }: { slug: keyof ComparisonRowOut }) {
   const map: Record<keyof ComparisonRowOut, string> = {
@@ -218,11 +261,53 @@ function ScenarioLabel({ slug }: { slug: keyof ComparisonRowOut }) {
   return <span>{map[slug]}</span>
 }
 
+/**
+ * Find the index of the winning scenario in a ComparisonRow.
+ *
+ * - direction='max' → highest value wins (equity, total net position)
+ * - direction='min' → lowest value wins (monthly cost change vs today —
+ *   most-negative number is the biggest savings)
+ *
+ * Returns null if every value is non-finite (defensive — engine shouldn't
+ * emit those, but better to skip the trophy than crash).
+ */
+function winningSlug(
+  row: ComparisonRowOut,
+  direction: 'max' | 'min',
+): keyof ComparisonRowOut | null {
+  const slugs: Array<keyof ComparisonRowOut> = [
+    'stay',
+    'refinance',
+    'sell_buy',
+    'rent',
+    'rent_out_buy',
+  ]
+  let best: keyof ComparisonRowOut | null = null
+  let bestVal = direction === 'max' ? -Infinity : Infinity
+  for (const s of slugs) {
+    const v = row[s]
+    if (!Number.isFinite(v)) continue
+    if (direction === 'max' ? v > bestVal : v < bestVal) {
+      bestVal = v
+      best = s
+    }
+  }
+  return best
+}
+
 function ComparisonTable({
   rows,
   colorize = true,
 }: {
-  rows: Array<{ label: string; row: ComparisonRowOut; hint?: string }>
+  rows: Array<{
+    label: string
+    row: ComparisonRowOut
+    hint?: string
+    /** When set, the winning cell in the row gets a Trophy + bold + amber tint. */
+    winner?: 'max' | 'min'
+    /** Tooltip slug for the row label (one of compare.metric.*). */
+    help?: string
+  }>
   colorize?: boolean
 }) {
   const slugs: Array<keyof ComparisonRowOut> = [
@@ -246,30 +331,48 @@ function ComparisonTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ label, row, hint }) => (
-            <tr key={label} className="border-b last:border-0">
-              <td className="py-2 pr-3">
-                <div className="font-medium text-stone-900">{label}</div>
-                {hint && <div className="text-xs text-stone-500">{hint}</div>}
-              </td>
-              {slugs.map((s) => {
-                const v = row[s]
-                const cls = colorize
-                  ? v > 0 ? 'text-emerald-600'
-                  : v < 0 ? 'text-red-600'
-                  : 'text-foreground'
-                  : 'text-foreground'
-                return (
-                  <td
-                    key={s}
-                    className={cn('py-2 pr-3 text-right tabular-nums', cls)}
-                  >
-                    {formatCurrency(v)}
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
+          {rows.map(({ label, row, hint, winner, help }) => {
+            const win = winner ? winningSlug(row, winner) : null
+            return (
+              <tr key={label} className="border-b last:border-0">
+                <td className="py-2 pr-3">
+                  <div className="inline-flex items-center gap-1.5 font-medium text-stone-900">
+                    {label}
+                    {help && <HelpTip slug={help} />}
+                  </div>
+                  {hint && <div className="text-xs text-stone-500">{hint}</div>}
+                </td>
+                {slugs.map((s) => {
+                  const v = row[s]
+                  const isWinner = win === s
+                  const cls = isWinner
+                    ? 'text-amber-700 font-semibold'
+                    : colorize
+                      ? v > 0
+                        ? 'text-emerald-600'
+                        : v < 0
+                          ? 'text-red-600'
+                          : 'text-foreground'
+                      : 'text-foreground'
+                  return (
+                    <td
+                      key={s}
+                      className={cn(
+                        'py-2 pr-3 text-right tabular-nums',
+                        cls,
+                        isWinner && 'bg-amber-50',
+                      )}
+                    >
+                      <span className="inline-flex items-center justify-end gap-1.5">
+                        {isWinner && <TrophyBadge />}
+                        {formatCurrency(v)}
+                      </span>
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -302,10 +405,24 @@ function Stat({
   )
 }
 
-function KV({ k, v, bold }: { k: string; v: string; bold?: boolean }) {
+function KV({
+  k,
+  v,
+  bold,
+  help,
+}: {
+  k: string
+  v: string
+  bold?: boolean
+  /** Tooltip slug into @/copy/tooltips — renders a "?" next to the label. */
+  help?: string
+}) {
   return (
     <div className="flex justify-between text-sm">
-      <span className="text-stone-600">{k}</span>
+      <span className="inline-flex items-center gap-1.5 text-stone-600">
+        {k}
+        {help && <HelpTip slug={help} />}
+      </span>
       <span className={cn('tabular-nums text-stone-900', bold && 'font-semibold')}>{v}</span>
     </div>
   )
@@ -542,6 +659,12 @@ export default function DecisionMap() {
   // Wizard step — controlled here so it survives recalcs (a user who
   // tweaked a later-step field and ran it stays on that step).
   const [step, setStep] = useState(0)
+  // Anonymous-mode awareness — drives the SignupPrompt banner. session
+  // can be undefined briefly during initial Supabase hydration; we treat
+  // that as anonymous for rendering purposes (the banner is benign even
+  // if it flashes for a few hundred ms).
+  const session = useSession()
+  const isAnonymous = session === null
 
   const setField = useCallback((key: string, value: number | boolean) => {
     setFormState((s) => ({ ...s, [key]: value }))
@@ -566,9 +689,24 @@ export default function DecisionMap() {
       // CRM activity event — fires only on a successful run so failed
       // runs (network blip, validation error, etc.) don't pollute the
       // lead's timeline. Status ladder bumps user to at least 'active'.
+      // No-ops silently for anonymous users (trackActivity swallows
+      // "Not signed in" — see leadsApi.ts).
       trackActivity('ran_decision_map', {
         purchase_price: inputs.current_home_value,
       })
+      // Anonymous: stash the run so a subsequent signup gets it replayed
+      // as their first saved scenario (App.tsx handles the replay).
+      // Homeowner DecisionMap has no save endpoint of its own today, so
+      // the App.tsx replay just clears the stash for 'homeowner_decision'
+      // — but we still write it so we don't lose the future ability to
+      // wire one in without touching the calculator page.
+      if (isAnonymous) {
+        stashAnonRun({
+          kind: 'homeowner_decision',
+          inputs: inputs as unknown as Record<string, unknown>,
+          result: r as unknown as Record<string, unknown>,
+        })
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to run scenario engine')
     } finally {
@@ -639,6 +777,16 @@ export default function DecisionMap() {
             <FeasibilityStrip result={result} />
             <ScenarioDetails result={result} />
             <AuditStrip result={result} />
+            {/* Anonymous-mode CTA — only renders after the user has seen
+                the recommendation. Banner variant: low-pressure, lives
+                at the end of the page. The signed-in app shows nothing
+                here today (Recent Calculations is on the Dashboard). */}
+            {isAnonymous && (
+              <SignupPrompt
+                title="Save and revisit this Decision Map"
+                body="Create a free account to keep this analysis, compare it to alternatives later, and reach out to a vetted partner when you're ready."
+              />
+            )}
           </>
         )}
       </div>
@@ -667,6 +815,9 @@ function DecisionSummary({ result }: { result: RunAllResponse }) {
   const rec = decision_map.recommendation
   const pr = decision_map.priority_rankings
   const recommendedPipelines = pipelinesForScenario(rec.best_financial_outcome)
+  // Animated count-up for the headline net-position number — re-runs on
+  // every recalc since `target` changes. Mirrors the FTHB DecisionMap.
+  const animatedNet = useCountUp(rec.best_total_net_position)
 
   return (
     <>
@@ -678,19 +829,31 @@ function DecisionSummary({ result }: { result: RunAllResponse }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Hero — winning scenario name + animated net-position number.
+              Pulled out of the 4-stat grid so it can breathe; the grid
+              below carries the supporting stats (monthly affordability,
+              simplest path) at smaller weight. */}
+          <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-800">
+              <Trophy className="h-4 w-4 text-amber-500" />
+              Best wealth outcome
+            </div>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <div className="text-2xl font-semibold text-stone-900">
+                {rec.best_financial_outcome}
+              </div>
+              <div className="text-4xl font-extrabold tabular-nums text-emerald-700 sm:text-5xl">
+                {formatCurrency(animatedNet)}
+              </div>
+            </div>
+            <div className="mt-1 text-xs text-stone-600">
+              Total net position over {decision_map.selected_hold_period_years} years.
+            </div>
+          </div>
+
           <p className="text-sm leading-relaxed">{rec.plain_english_insight}</p>
 
-          <div className="grid grid-cols-2 gap-4 border-t pt-4 md:grid-cols-4">
-            <Stat
-              label="Best wealth outcome"
-              value={rec.best_financial_outcome}
-              tone="good"
-            />
-            <Stat
-              label="Total net position"
-              value={formatCurrency(rec.best_total_net_position)}
-              tone="good"
-            />
+          <div className="grid grid-cols-2 gap-4 border-t pt-4 md:grid-cols-2">
             <Stat
               label="Best monthly affordability"
               value={rec.best_for_monthly_affordability}
@@ -749,21 +912,30 @@ function ScenarioComparisonTables({ result }: { result: RunAllResponse }) {
                 label: 'Monthly all-in change vs today',
                 row: dm.monthly_all_in_impact_vs_today,
                 hint: 'Before tax — new out-of-pocket each month.',
+                // Cost change: most-negative wins (biggest monthly savings).
+                winner: 'min',
+                help: 'compare.metric.monthly_all_in_change',
               },
               {
                 label: 'After-tax monthly change vs today',
                 row: dm.after_tax_monthly_impact_vs_today,
                 hint: 'After deductions / rental tax benefit.',
+                winner: 'min',
+                help: 'compare.metric.after_tax_monthly_change',
               },
               {
                 label: 'Net equity at horizon (if sold)',
                 row: dm.net_equity_if_sold_at_horizon,
                 hint: 'Home(s) sold at hold-period end, net of selling costs.',
+                winner: 'max',
+                help: 'compare.metric.net_equity_if_sold',
               },
               {
                 label: 'Total net position',
                 row: dm.total_net_position,
                 hint: 'Equity + cumulative rental cash flow − make-ready costs.',
+                winner: 'max',
+                help: 'compare.metric.total_net_position',
               },
             ]}
           />
@@ -883,16 +1055,17 @@ function StayCard({ result }: { result: RunAllResponse }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5">
-            <KV k="Monthly P&I" v={formatCurrency(s.current_monthly_pi)} />
+            <KV k="Monthly P&I" v={formatCurrency(s.current_monthly_pi)} help="decisionmap.metric.current_monthly_pi" />
             <KV
               k="Total monthly ownership cost"
               v={formatCurrency(s.total_monthly_ownership_cost)}
               bold
+              help="decisionmap.metric.total_monthly_ownership_cost"
             />
-            <KV k="Future home value" v={formatCurrency(s.future_home_value)} />
-            <KV k="Future mortgage balance" v={formatCurrency(s.future_mortgage_balance)} />
-            <KV k="Gross equity" v={formatCurrency(s.gross_equity)} />
-            <KV k="Net equity at horizon" v={formatCurrency(s.net_equity_at_horizon)} bold />
+            <KV k="Future home value" v={formatCurrency(s.future_home_value)} help="decisionmap.metric.future_home_value" />
+            <KV k="Future mortgage balance" v={formatCurrency(s.future_mortgage_balance)} help="decisionmap.metric.future_mortgage_balance" />
+            <KV k="Gross equity" v={formatCurrency(s.gross_equity)} help="decisionmap.metric.gross_equity" />
+            <KV k="Net equity at horizon" v={formatCurrency(s.net_equity_at_horizon)} bold help="decisionmap.metric.net_equity_at_horizon" />
             <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
               <ContactPipelineButton pipeline="financial-planner" />
             </div>
@@ -931,30 +1104,35 @@ function RefinanceCard({ result }: { result: RunAllResponse }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5">
-            <KV k="New loan amount" v={formatCurrency(r.new_loan_amount)} />
-            <KV k="New monthly P&I" v={formatCurrency(r.new_monthly_pi)} />
+            <KV k="New loan amount" v={formatCurrency(r.new_loan_amount)} help="decisionmap.metric.new_loan_amount" />
+            <KV k="New monthly P&I" v={formatCurrency(r.new_monthly_pi)} help="decisionmap.metric.new_monthly_pi" />
             <KV
               k="Monthly payment change"
               v={`${saves ? '−' : '+'}${formatCurrency(Math.abs(r.monthly_payment_change))}`}
+              help="decisionmap.metric.monthly_payment_change"
             />
-            <KV k="Cash to close" v={formatCurrency(r.cash_to_close)} />
+            <KV k="Cash to close" v={formatCurrency(r.cash_to_close)} help="decisionmap.metric.cash_to_close" />
             <KV
               k="Break-even"
               v={r.break_even_months == null ? 'N/A (no savings)' : `${r.break_even_months} mo`}
+              help="decisionmap.metric.break_even_months"
             />
             <KV
               k="Cumulative payment savings"
               v={formatCurrency(r.cumulative_payment_savings)}
               bold
+              help="decisionmap.metric.cumulative_payment_savings"
             />
             <KV
               k="Total monthly cost"
               v={formatCurrency(r.total_monthly_ownership_cost)}
+              help="decisionmap.metric.total_monthly_ownership_cost"
             />
             <KV
               k="Net equity at horizon"
               v={formatCurrency(r.net_equity_at_horizon)}
               bold
+              help="decisionmap.metric.net_equity_at_horizon"
             />
             <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
               <ContactPipelineButton pipeline="mortgage-broker" />
@@ -993,24 +1171,27 @@ function SellBuyCard({ result }: { result: RunAllResponse }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5">
-            <KV k="Sale proceeds (net of payoff)" v={formatCurrency(s.net_sale_proceeds_before_reserve)} />
-            <KV k="Cash available for next purchase" v={formatCurrency(s.cash_available_for_next_purchase)} />
-            <KV k="Required down payment" v={formatCurrency(s.required_down_payment)} />
-            <KV k="New loan amount" v={formatCurrency(s.new_purchase_loan_amount)} />
-            <KV k="New monthly P&I" v={formatCurrency(s.new_monthly_pi)} />
-            <KV k="Cash remaining at close" v={formatCurrency(s.cash_remaining_at_close)} />
+            <KV k="Sale proceeds (net of payoff)" v={formatCurrency(s.net_sale_proceeds_before_reserve)} help="decisionmap.metric.net_sale_proceeds_before_reserve" />
+            <KV k="Cash available for next purchase" v={formatCurrency(s.cash_available_for_next_purchase)} help="decisionmap.metric.cash_available_for_next_purchase" />
+            <KV k="Required down payment" v={formatCurrency(s.required_down_payment)} help="decisionmap.metric.required_down_payment" />
+            <KV k="New loan amount" v={formatCurrency(s.new_purchase_loan_amount)} help="decisionmap.metric.new_purchase_loan_amount" />
+            <KV k="New monthly P&I" v={formatCurrency(s.new_monthly_pi)} help="decisionmap.metric.new_monthly_pi" />
+            <KV k="Cash remaining at close" v={formatCurrency(s.cash_remaining_at_close)} help="decisionmap.metric.cash_remaining_at_close" />
             <KV
               k="Total monthly cost"
               v={formatCurrency(s.total_monthly_ownership_cost)}
+              help="decisionmap.metric.total_monthly_ownership_cost"
             />
             <KV
               k="Monthly cost change vs stay"
               v={formatCurrency(s.monthly_ownership_cost_change_vs_stay)}
+              help="decisionmap.metric.monthly_ownership_cost_change_vs_stay"
             />
             <KV
               k="Net equity at horizon"
               v={formatCurrency(s.net_equity_at_horizon)}
               bold
+              help="decisionmap.metric.net_equity_at_horizon"
             />
             <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
               <ContactPipelineButton pipeline="real-estate-agent" />
@@ -1056,24 +1237,27 @@ function RentCard({ result }: { result: RunAllResponse }) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-1.5">
-            <KV k="Effective rent collected" v={formatCurrency(mf.effective_rent_collected)} />
-            <KV k="Operating expenses" v={formatCurrency(mf.total_operating_expenses_before_debt)} />
-            <KV k="P&I" v={formatCurrency(mf.current_monthly_pi)} />
-            <KV k="Monthly cash flow (pre-tax)" v={formatCurrency(mf.monthly_cash_flow_before_tax)} />
-            <KV k="Monthly tax benefit" v={formatCurrency(tv.monthly_tax_benefit)} />
+            <KV k="Effective rent collected" v={formatCurrency(mf.effective_rent_collected)} help="decisionmap.metric.effective_rent_collected" />
+            <KV k="Operating expenses" v={formatCurrency(mf.total_operating_expenses_before_debt)} help="decisionmap.metric.total_operating_expenses_before_debt" />
+            <KV k="P&I" v={formatCurrency(mf.current_monthly_pi)} help="decisionmap.metric.current_monthly_pi" />
+            <KV k="Monthly cash flow (pre-tax)" v={formatCurrency(mf.monthly_cash_flow_before_tax)} help="decisionmap.metric.monthly_cash_flow_before_tax" />
+            <KV k="Monthly tax benefit" v={formatCurrency(tv.monthly_tax_benefit)} help="decisionmap.metric.monthly_tax_benefit" />
             <KV
               k="Monthly cash flow (after tax)"
               v={formatCurrency(tv.monthly_cash_flow_after_tax)}
               bold
+              help="decisionmap.metric.monthly_cash_flow_after_tax"
             />
             <KV
               k="Cumulative cash flow"
               v={formatCurrency(r.cumulative_after_tax_rental_cash_flow)}
+              help="decisionmap.metric.cumulative_after_tax_rental_cash_flow"
             />
             <KV
               k="Net equity at horizon"
               v={formatCurrency(r.net_equity_at_horizon)}
               bold
+              help="decisionmap.metric.net_equity_at_horizon"
             />
             <div className="flex flex-wrap gap-2 border-t pt-3 mt-3">
               <ContactPipelineButton pipeline="real-estate-agent" />
@@ -1136,12 +1320,13 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
               <div className="text-xs font-semibold uppercase tracking-wide text-stone-600">
                 Upfront cash
               </div>
-              <KV k="Total upfront cash needed" v={formatCurrency(r.total_upfront_cash_needed)} />
-              <KV k="Cash available" v={formatCurrency(r.available_cash_for_purchase)} />
+              <KV k="Total upfront cash needed" v={formatCurrency(r.total_upfront_cash_needed)} help="decisionmap.metric.total_upfront_cash_needed" />
+              <KV k="Cash available" v={formatCurrency(r.available_cash_for_purchase)} help="decisionmap.metric.available_cash_for_purchase" />
               <KV
                 k={r.cash_surplus_or_shortfall >= 0 ? 'Surplus' : 'Shortfall'}
                 v={formatCurrency(r.cash_surplus_or_shortfall)}
                 bold
+                help="decisionmap.metric.cash_surplus_or_shortfall"
               />
             </div>
             <div className="space-y-1.5">
@@ -1151,15 +1336,18 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
               <KV
                 k="Before tax"
                 v={formatCurrency(r.net_monthly_housing_cost_before_tax)}
+                help="decisionmap.metric.net_monthly_housing_cost_before_tax"
               />
               <KV
                 k="After tax"
                 v={formatCurrency(r.net_monthly_housing_cost_after_tax)}
                 bold
+                help="decisionmap.metric.net_monthly_housing_cost_after_tax"
               />
               <KV
                 k="Δ vs stay (after tax)"
                 v={formatCurrency(r.after_tax_monthly_impact_vs_stay)}
+                help="decisionmap.metric.after_tax_monthly_impact_vs_stay"
               />
             </div>
             <div className="space-y-1.5 md:col-span-2 border-t pt-3">
@@ -1169,19 +1357,23 @@ function RentOutBuyCard({ result }: { result: RunAllResponse }) {
               <KV
                 k="Current home net equity"
                 v={formatCurrency(r.current_home_net_equity_at_horizon)}
+                help="decisionmap.metric.current_home_net_equity_at_horizon"
               />
               <KV
                 k="New home net equity"
                 v={formatCurrency(r.new_home_net_equity_at_horizon)}
+                help="decisionmap.metric.new_home_net_equity_at_horizon"
               />
               <KV
                 k="Cumulative rental cash flow"
                 v={formatCurrency(r.cumulative_after_tax_rental_cash_flow)}
+                help="decisionmap.metric.cumulative_after_tax_rental_cash_flow"
               />
               <KV
                 k="Total net position"
                 v={formatCurrency(r.total_net_position)}
                 bold
+                help="decisionmap.metric.total_net_position"
               />
             </div>
             <div className="flex flex-wrap gap-2 border-t pt-3 md:col-span-2">
