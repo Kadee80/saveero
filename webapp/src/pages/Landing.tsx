@@ -190,14 +190,19 @@ function Hero() {
             decide.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
+            {/* Primary CTA goes straight into the Decision Map — the
+                engine is fully usable anonymously (Van's #5 punch-list
+                item, shipped 2026-05-19). Save / Recent prompt signup;
+                pre-signup runs replay into the user's account on the
+                first signed-in load. */}
             <Button
               asChild
               size="lg"
               className="text-base shadow-lg transition-shadow hover:shadow-xl"
               style={{ backgroundColor: SCENARIO_PALETTE.blue }}
             >
-              <Link to="/login?mode=signup">
-                Try it free <ArrowRight className="ml-1 h-4 w-4" />
+              <Link to="/decision-map">
+                Try it now <ArrowRight className="ml-1 h-4 w-4" />
               </Link>
             </Button>
             <Button asChild variant="ghost" size="lg" className="text-base">
@@ -205,7 +210,7 @@ function Hero() {
             </Button>
           </div>
           <p className="mt-4 text-xs text-stone-500">
-            No credit card. Free to try while we're in beta.
+            No signup, no credit card. Free to use while we're in beta.
           </p>
         </div>
 
@@ -553,20 +558,26 @@ function ClosingCta() {
           lasts a lot longer.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          {/* Drop directly into the calculator — anonymous-friendly per
+              Van's #5. Signup only kicks in if the user wants to save
+              the scenario or contact a partner. */}
           <Button
             asChild
             size="lg"
             className="text-base shadow-lg transition-shadow hover:shadow-xl"
             style={{ backgroundColor: SCENARIO_PALETTE.rose }}
           >
-            <Link to="/login?mode=signup">
-              Start free <ArrowRight className="ml-1 h-4 w-4" />
+            <Link to="/decision-map">
+              Try it now <ArrowRight className="ml-1 h-4 w-4" />
             </Link>
           </Button>
           <Button asChild variant="ghost" size="lg" className="text-base">
             <Link to="/login">Sign in</Link>
           </Button>
         </div>
+        <p className="mt-4 text-xs text-stone-500">
+          No signup needed to run the engine.
+        </p>
       </div>
     </section>
   )
