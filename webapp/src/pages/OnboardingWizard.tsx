@@ -62,6 +62,7 @@ import {
   type LeadIntent,
   type LeadRole,
 } from '@/api/leadsApi'
+import { analytics } from '@/analytics/mixpanel'
 
 // ---------------------------------------------------------------------------
 // UI option shapes — kept local so the wizard owns its own copy + ordering
@@ -405,6 +406,14 @@ export default function OnboardingWizard({
       }
 
       await updateMyLead(body)
+      // Product analytics — intake finished. Carries the persona fields
+      // the wizard captured so funnels can segment by who the user is.
+      analytics.track(analytics.EVENTS.ONBOARDING_COMPLETED, {
+        role: body.role,
+        intent: body.intent,
+        pipeline: body.pipeline,
+        pro_type: body.pro_type,
+      })
       onComplete()
     } catch (err: unknown) {
       const msg =

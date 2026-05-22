@@ -15,6 +15,7 @@ import { Briefcase, Landmark, MapPin, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { trackActivity, updateMyLead } from '@/api/leadsApi'
+import { analytics } from '@/analytics/mixpanel'
 
 export type Pipeline = 'financial-planner' | 'real-estate-agent' | 'mortgage-broker'
 
@@ -79,6 +80,8 @@ export function ContactPipelineButton({
         //      convention.
         const kind = `clicked_contact_${pipeline.replace(/-/g, '_')}`
         trackActivity(kind, { pipeline })
+        // Product analytics — the engaged-lead conversion moment.
+        analytics.track(analytics.EVENTS.PARTNER_CONTACTED, { pipeline })
         updateMyLead({ pipeline }).catch((err) => {
           console.warn('[lead] pipeline update failed:', err)
         })

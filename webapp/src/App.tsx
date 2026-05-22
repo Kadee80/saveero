@@ -9,6 +9,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { readAnonStash, clearAnonStash } from '@/api/anonStash'
 import { saveFthbAnalysis } from '@/api/fthbApi'
+import { analytics } from '@/analytics/mixpanel'
 import Dashboard from './pages/Dashboard'
 import ListProperty from './pages/ListProperty'
 import MortgageCalculator from './pages/MortgageCalculator'
@@ -73,12 +74,33 @@ export default function App() {
   const { pathname } = useLocation()
 
   useEffect(() => {
-    // Hydrate from existing session
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    // Hydrate from existing session. If one's already present (returning
+    // visitor with a live session), tie analytics to them so events on
+    // this load aren't anonymous. No 'Signed In' event here — this is a
+    // page load, not a fresh authentication.
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      const u = data.session?.user
+      if (u) {
+        const meta = u.user_metadata as { name?: string } | null
+        analytics.identify(u.id, { email: u.email, name: meta?.name })
+      }
+    })
 
-    // Keep in sync with Supabase auth events (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Keep in sync with Supabase auth events (login, logout, token refresh).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
+      if (event === 'SIGNED_IN' && session?.user) {
+        const meta = session.user.user_metadata as { name?: string } | null
+        analytics.identify(session.user.id, {
+          email: session.user.email,
+          name: meta?.name,
+        })
+        analytics.track(analytics.EVENTS.SIGNED_IN, { method: 'email' })
+      } else if (event === 'SIGNED_OUT') {
+        // New identity for whoever's next on this device.
+        analytics.reset()
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -153,7 +175,13 @@ export default function App() {
     let cancelled = false
     getMyProfile()
       .then((p) => {
-        if (!cancelled) setIsAdmin(p.is_admin)
+        if (cancelled) return
+        setIsAdmin(p.is_admin)
+        // Stamp the user's role onto their Mixpanel profile + as a super
+        // property so every event is segmentable by persona. Cheap to
+        // re-send; identify() merges. (role/email/name only — no PII
+        // beyond what's already on the profile.)
+        analytics.identify(p.id, { email: p.email, role: p.role })
       })
       .catch(() => {
         if (!cancelled) setIsAdmin(false)
@@ -162,6 +190,12 @@ export default function App() {
       cancelled = true
     }
   }, [session?.user.id])
+
+  // Pageview tracking — fires on every route change (SPA), including the
+  // anonymous calculator routes. No-ops without a Mixpanel token.
+  useEffect(() => {
+    analytics.trackPageView(pathname)
+  }, [pathname])
 
   // Still checking session — show nothing to avoid flash
   if (session === undefined) {

@@ -74,6 +74,7 @@ import { HelpTip } from '@/components/HelpTip'
 import { SignupPrompt } from '@/components/SignupPrompt'
 import { useSession } from '@/api/auth'
 import { stashAnonRun } from '@/api/anonStash'
+import { analytics } from '@/analytics/mixpanel'
 
 // ---------------------------------------------------------------------------
 // Scenario colors and metadata
@@ -693,6 +694,12 @@ export default function DecisionMap() {
       // "Not signed in" — see leadsApi.ts).
       trackActivity('ran_decision_map', {
         purchase_price: inputs.current_home_value,
+      })
+      // Product analytics — engine ran and produced a recommendation.
+      analytics.track(analytics.EVENTS.ANALYSIS_RUN, {
+        engine: 'homeowner_decision_map',
+        recommended: r.decision_map.recommendation.best_financial_outcome,
+        anonymous: isAnonymous,
       })
       // Anonymous: stash the run so a subsequent signup gets it replayed
       // as their first saved scenario (App.tsx handles the replay).

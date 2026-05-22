@@ -29,6 +29,7 @@
 import React, { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { signIn, signUp } from '@/api/auth'
+import { analytics } from '@/analytics/mixpanel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -92,7 +93,7 @@ export default function Login() {
         // email-confirmation round-trip. App.tsx reads it back on the
         // first authenticated session and creates the CRM lead row.
         const trimmedName = name.trim()
-        const { error } = await signUp(
+        const { data, error } = await signUp(
           email,
           password,
           trimmedName ? { name: trimmedName } : undefined,
@@ -100,6 +101,19 @@ export default function Login() {
         if (error) {
           setError(error.message)
         } else {
+          // Value moment — a new account was created. Fired here at the
+          // signup action (pre-confirmation) so it's attributed even if
+          // the user never confirms their email. The later 'Signed In'
+          // event (App.tsx) marks actual activation. If Supabase returned
+          // the new user id, tie this event to them so it stitches to the
+          // post-confirmation identity.
+          if (data?.user?.id) {
+            analytics.identify(data.user.id, {
+              email,
+              name: trimmedName || null,
+            })
+          }
+          analytics.track(analytics.EVENTS.ACCOUNT_CREATED, { method: 'email' })
           setInfo('Account created! Check your email for a confirmation link, then sign in.')
           setMode('signin')
         }

@@ -56,6 +56,7 @@ import { HelpTip } from '@/components/HelpTip'
 import { SignupPrompt } from '@/components/SignupPrompt'
 import { useSession } from '@/api/auth'
 import { stashAnonRun } from '@/api/anonStash'
+import { analytics } from '@/analytics/mixpanel'
 import {
   DEFAULT_FTHB_INPUTS,
   getFthbAnalysis,
@@ -252,6 +253,12 @@ export default function FTHBDecisionMap() {
       // anonymous users via trackActivity's "Not signed in" swallow.
       trackActivity('ran_fthb_decision_map', {
         best: r.decision_map.recommendation.best_executable_path,
+      })
+      // Product analytics — engine ran and produced a recommendation.
+      analytics.track(analytics.EVENTS.ANALYSIS_RUN, {
+        engine: 'fthb_decision_map',
+        recommended: r.decision_map.recommendation.best_executable_path,
+        anonymous: isAnonymous,
       })
       // Anonymous: stash the run so a subsequent signup gets it replayed
       // as the user's first saved FTHB analysis (App.tsx handles the
@@ -539,6 +546,10 @@ function SaveBar({
       })
       setSavedId(id)
       trackActivity('saved_fthb_analysis', {
+        best: result.decision_map.recommendation.best_executable_path,
+      })
+      analytics.track(analytics.EVENTS.SCENARIO_SAVED, {
+        engine: 'fthb_decision_map',
         best: result.decision_map.recommendation.best_executable_path,
       })
     } catch (err: unknown) {
