@@ -17,7 +17,7 @@
  * @returns {JSX.Element} The dashboard hub
  */
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
   Calculator,
@@ -58,6 +58,7 @@ type LeadGate =
 export default function Dashboard() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [gate, setGate] = useState<LeadGate>({ kind: 'loading' })
+  const navigate = useNavigate()
 
   useEffect(() => {
     getUser().then((u) => setUserEmail(u?.email ?? null))
@@ -133,25 +134,44 @@ export default function Dashboard() {
     }
   }, [])
 
-  // Refetch after the wizard PUTs role/intent — once we see real
-  // values the gate flips to 'ready' and the hub renders.
+  // Refetch after the wizard PUTs role/intent, then route the user
+  // straight to the engine that matches who they told us they are —
+  // rather than dropping them on the hub and making them hunt for the
+  // right tile. The wizard IS the intake; its whole job is to figure
+  // out where the user should go, so we honor that here.
+  //
+  //   first_time_buyer → /fthb-decision-map
+  //   homeowner / pro  → /decision-map  (the flagship; mirrors the
+  //                       hub's existing non-FTHB hero default)
+  //
+  // We navigate with replace:true so the back button doesn't bounce
+  // the user back into the wizard they just finished. Their first
+  // saved scenario (from the anonymous-run replay, if any) is waiting
+  // on the destination page.
   async function handleWizardComplete() {
+    let lead: Lead
     try {
-      const lead = await getMyLead()
-      if (lead.role === 'unknown' || lead.intent === 'unknown') {
-        // Belt + suspenders: if for some reason the PUT didn't stick
-        // (race with another tab clearing it, etc.) leave the wizard
-        // up rather than dumping the user back into it with no
-        // explanation.
-        setGate({ kind: 'wizard', lead })
-      } else {
-        setGate({ kind: 'ready', role: lead.role })
-      }
+      lead = await getMyLead()
     } catch {
       // PUT succeeded but the refetch failed — assume the values are
-      // good and let the user into the hub. Role unknown → homeowner default.
-      setGate({ kind: 'ready', role: null })
+      // good and send them to the flagship engine rather than stranding
+      // them on the wizard.
+      navigate('/decision-map', { replace: true })
+      return
     }
+
+    if (lead.role === 'unknown' || lead.intent === 'unknown') {
+      // Belt + suspenders: if for some reason the PUT didn't stick
+      // (race with another tab clearing it, etc.) leave the wizard up
+      // rather than dumping the user somewhere with no explanation.
+      setGate({ kind: 'wizard', lead })
+      return
+    }
+
+    navigate(
+      lead.role === 'first_time_buyer' ? '/fthb-decision-map' : '/decision-map',
+      { replace: true },
+    )
   }
 
   if (gate.kind === 'loading') {
