@@ -444,38 +444,151 @@ export default function App() {
 }
 
 // ---------------------------------------------------------------------------
-// AnonymousShell — lightweight chrome for anonymous users running the
-// calculator pages. Top bar with logo + Sign-in only; no sidebar (no
-// Recent Calculations, no admin, no list-property — those are all
-// auth-only surfaces). The calculator page itself decides what to do
-// with its auth-gated affordances (Save bar, contact-a-pro buttons) by
-// detecting `session === null` via the API helpers' "Not signed in" throws.
+// AnonymousShell — chrome for anonymous users running the calculator pages.
 //
-// Note: we deliberately do NOT render a "Get started / Sign up" button
-// in this chrome. The user is already in the product; pushing them at
-// signup mid-task contradicts the whole point of the anonymous flow.
-// SignupPrompt at the bottom of results carries that conversion at the
-// right moment (when there's actually a scenario worth saving).
-// Removed 2026-05-26 after Van saw a partner-demo bounce into the
-// auth wall from this header button.
+// Mirrors the authed sidebar's dimensions, look, and collapse behaviour so
+// the layout is consistent across the auth boundary (a signing-up user
+// shouldn't see the page jump). The nav is filtered to the routes that
+// work without a session — currently Decision Map + FTHB Decision Map.
+// Auth-only surfaces (Recent Calculations, Compare, List Property, Admin)
+// are intentionally not surfaced here; the user wouldn't get useful pages
+// if they followed those links.
+//
+// Bottom of the sidebar swaps the authed Sign-out for a Sign-in button +
+// quiet "Already have an account?" hint. We deliberately do NOT show a
+// "Get started / Sign up" CTA in this chrome — the user is already in
+// the product. SignupPrompt at the bottom of results carries that
+// conversion at the right moment (when there's actually a scenario
+// worth saving).
+//
+// Originally a slim top bar; reworked into a sidebar 2026-05-26 after
+// Van pointed out that users who came through the intake wizard landed
+// on the Decision Map with no way to discover the other engine.
 // ---------------------------------------------------------------------------
 
+/** Public-only subset of the nav. Filtered from the same source the authed
+ *  sidebar uses so the labels and icons stay in sync. */
+function buildAnonymousNavItems(): Array<{ to: string; label: string; icon: typeof HomeIcon }> {
+  return [
+    { to: '/decision-map',      label: 'Decision Map', icon: Compass },
+    { to: '/fthb-decision-map', label: 'FTHB',         icon: Compass },
+  ]
+}
+
 function AnonymousShell({ children }: { children: React.ReactNode }) {
+  // Persist the collapsed state across navigations within the anonymous
+  // session. Same key shape as the authed sidebar would use if it
+  // persisted (it doesn't today), so the two states stay independent
+  // by design — an anonymous user collapsing the sidebar shouldn't
+  // affect their authed experience after they sign up.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('saveero.anon.sidebar.collapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'saveero.anon.sidebar.collapsed',
+        collapsed ? '1' : '0',
+      )
+    } catch {
+      // ignore — private mode / full storage
+    }
+  }, [collapsed])
+
+  const { pathname } = useLocation()
+  const navItems = buildAnonymousNavItems()
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
-          <Link to="/" className="text-lg font-bold tracking-tight">
-            Saveero
+    <div className="flex min-h-screen bg-background">
+      {/* Sidebar — same dimensions + visual language as the authed app
+          so the layout doesn't jump after signup. */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 flex flex-col bg-stone-900 text-stone-100 transition-all duration-200',
+          collapsed ? 'w-16' : 'w-52',
+        )}
+      >
+        {/* Logo links back to Landing so the user can always get out. */}
+        <Link
+          to="/"
+          className="flex h-14 items-center px-4 border-b border-stone-700"
+        >
+          {collapsed ? (
+            <span className="text-lg font-bold mx-auto">S</span>
+          ) : (
+            <span className="text-lg font-bold tracking-tight">Saveero</span>
+          )}
+        </Link>
+
+        {/* Nav — public calculators only. */}
+        <nav className="flex-1 py-4 space-y-1 px-2">
+          {navItems.map(({ to, label, icon: Icon }) => {
+            const active = pathname === to
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={cn(
+                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  active
+                    ? 'bg-stone-700 text-white'
+                    : 'text-stone-400 hover:bg-stone-800 hover:text-white',
+                )}
+              >
+                <Icon size={18} className="shrink-0" />
+                {!collapsed && <span>{label}</span>}
+              </Link>
+            )
+          })}
+        </nav>
+
+        {/* Sign-in footer — quieter than the authed "Sign out" zone,
+            but visible enough that a returning user can get in. No
+            'Get started / Sign up' CTA on purpose (would defeat the
+            anonymous flow). */}
+        <div className="border-t border-stone-700 px-2 py-3 space-y-1">
+          {!collapsed && (
+            <p className="px-3 text-xs text-stone-500">
+              Already have an account?
+            </p>
+          )}
+          <Link
+            to="/login?mode=signin"
+            className={cn(
+              'flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium text-stone-400 hover:bg-stone-800 hover:text-white transition-colors',
+              collapsed && 'justify-center',
+            )}
+            aria-label="Sign in"
+          >
+            <LogOut size={18} className="shrink-0 rotate-180" />
+            {!collapsed && <span>Sign in</span>}
           </Link>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/login?mode=signin">Sign in</Link>
-            </Button>
-          </div>
         </div>
-      </header>
-      <main>{children}</main>
+
+        {/* Collapse toggle — same affordance the authed sidebar has. */}
+        <button
+          onClick={() => setCollapsed((c) => !c)}
+          className="flex items-center justify-center h-10 border-t border-stone-700 text-stone-400 hover:text-white transition-colors"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+      </aside>
+
+      {/* Main column matches the authed app's margin so calculator pages
+          render identically across the auth boundary. */}
+      <main
+        className={cn(
+          'flex-1 transition-all duration-200',
+          collapsed ? 'ml-16' : 'ml-52',
+        )}
+      >
+        {children}
+      </main>
     </div>
   )
 }
