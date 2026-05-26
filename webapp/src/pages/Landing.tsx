@@ -123,13 +123,18 @@ function TopNav() {
           >
             Sign in
           </Link>
+          {/* Top-nav primary CTA — routes into the calculator/intake
+              screen, not the auth wall. Matches Hero + ClosingCta so
+              every "Get started / Try it now" surface lands the user
+              in the same place. (Van flagged the inconsistency on
+              2026-05-26 mid-demo.) */}
           <Button
             asChild
             size="sm"
             className="shadow-md transition-shadow hover:shadow-lg"
             style={{ backgroundColor: SCENARIO_PALETTE.blue }}
           >
-            <Link to="/login?mode=signup">Get started</Link>
+            <Link to="/decision-map">Get started</Link>
           </Button>
         </div>
       </div>

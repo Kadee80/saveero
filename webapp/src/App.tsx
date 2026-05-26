@@ -383,11 +383,19 @@ export default function App() {
 
 // ---------------------------------------------------------------------------
 // AnonymousShell — lightweight chrome for anonymous users running the
-// calculator pages. Top bar with logo + Sign in / Get started CTAs; no
-// sidebar (no Recent Calculations, no admin, no list-property — those are
-// all auth-only surfaces). The calculator page itself decides what to do
+// calculator pages. Top bar with logo + Sign-in only; no sidebar (no
+// Recent Calculations, no admin, no list-property — those are all
+// auth-only surfaces). The calculator page itself decides what to do
 // with its auth-gated affordances (Save bar, contact-a-pro buttons) by
 // detecting `session === null` via the API helpers' "Not signed in" throws.
+//
+// Note: we deliberately do NOT render a "Get started / Sign up" button
+// in this chrome. The user is already in the product; pushing them at
+// signup mid-task contradicts the whole point of the anonymous flow.
+// SignupPrompt at the bottom of results carries that conversion at the
+// right moment (when there's actually a scenario worth saving).
+// Removed 2026-05-26 after Van saw a partner-demo bounce into the
+// auth wall from this header button.
 // ---------------------------------------------------------------------------
 
 function AnonymousShell({ children }: { children: React.ReactNode }) {
@@ -401,9 +409,6 @@ function AnonymousShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <Button asChild variant="ghost" size="sm">
               <Link to="/login?mode=signin">Sign in</Link>
-            </Button>
-            <Button asChild size="sm">
-              <Link to="/login?mode=signup">Get started</Link>
             </Button>
           </div>
         </div>
