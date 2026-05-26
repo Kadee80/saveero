@@ -5,7 +5,12 @@ import type { Session } from '@supabase/supabase-js'
 import { cn } from '@/lib/utils'
 import { supabase, signOut } from '@/api/auth'
 import { createLead, getMyProfile, updateMyLead, type LeadIntent, type LeadRole } from '@/api/leadsApi'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import {
   readAnonStash,
@@ -579,13 +584,9 @@ function AnonymousShell({ children }: { children: React.ReactNode }) {
             // anonymous.
             const linkTarget = requiresAuth ? '/login?mode=signup' : to
             const active = !requiresAuth && pathname === to
-            return (
+            const link = (
               <Link
-                key={to}
                 to={linkTarget}
-                title={
-                  requiresAuth ? `Sign up to use ${label}` : undefined
-                }
                 aria-label={
                   requiresAuth ? `${label} (sign up required)` : label
                 }
@@ -610,6 +611,20 @@ function AnonymousShell({ children }: { children: React.ReactNode }) {
                   </span>
                 )}
               </Link>
+            )
+            // For locked items, hover/focus pops a real Radix tooltip
+            // explaining the gate instead of the browser's slow,
+            // unstyled title attribute. Placed to the right so it
+            // escapes the dark sidebar regardless of collapsed state.
+            return requiresAuth ? (
+              <Tooltip key={to}>
+                <TooltipTrigger asChild>{link}</TooltipTrigger>
+                <TooltipContent side="right" sideOffset={12}>
+                  Create an account to access premium features
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <React.Fragment key={to}>{link}</React.Fragment>
             )
           })}
         </nav>
