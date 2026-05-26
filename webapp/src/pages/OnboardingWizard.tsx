@@ -288,13 +288,41 @@ function deriveRole(
 // Component
 // ---------------------------------------------------------------------------
 
+/**
+ * The body the wizard assembles for `updateMyLead` / custom submit. Exported
+ * so callers that override `onSubmit` (e.g. the anonymous `/start` flow which
+ * stashes to localStorage instead of PUT-ing) can type their handler.
+ */
+export interface OnboardingBody {
+  name?: string
+  role?: LeadRole
+  intent?: LeadIntent
+  pipeline?: string
+  pro_type?: string
+}
+
 interface OnboardingWizardProps {
   lead?: Lead | null
-  onComplete: () => void
+  /**
+   * Persist handler. Default writes to the lead via `updateMyLead`. The
+   * anonymous `/start` flow overrides this to stash the answers locally
+   * (since there is no lead row yet) and they're replayed once the user
+   * signs up. If the handler throws, the wizard surfaces the message and
+   * keeps the user on the last step.
+   */
+  onSubmit?: (body: OnboardingBody) => Promise<void>
+  /**
+   * Called after `onSubmit` resolves. The assembled body is passed so the
+   * caller can branch on persona / role for post-wizard routing — e.g.
+   * Dashboard reroutes the user to /fthb-decision-map vs /decision-map
+   * based on the derived role.
+   */
+  onComplete: (body: OnboardingBody) => void
 }
 
 export default function OnboardingWizard({
   lead,
+  onSubmit,
   onComplete,
 }: OnboardingWizardProps) {
   const [step, setStep] = useState<Step>(1)
@@ -366,13 +394,7 @@ export default function OnboardingWizard({
     setSubmitting(true)
     try {
       const finalRole = deriveRole(isCurrentHomeowner, persona)
-      const body: {
-        name?: string
-        role?: LeadRole
-        intent?: LeadIntent
-        pipeline?: string
-        pro_type?: string
-      } = { name: trimmedName }
+      const body: OnboardingBody = { name: trimmedName }
       if (finalRole !== null) body.role = finalRole
 
       // Branched submission: pros get pro_type + intent-as-purpose;
@@ -405,16 +427,23 @@ export default function OnboardingWizard({
         if (pipeline !== null) body.pipeline = pipeline
       }
 
-      await updateMyLead(body)
+      // Persist via the caller-supplied handler. Default (authed flow,
+      // mounted from Dashboard) PUTs to /api/me/lead. The anonymous
+      // /start flow overrides this to stash to localStorage — there's
+      // no lead row yet, so we wait until signup to replay.
+      const submit = onSubmit ?? ((b: OnboardingBody) => updateMyLead(b))
+      await submit(body)
       // Product analytics — intake finished. Carries the persona fields
       // the wizard captured so funnels can segment by who the user is.
+      // Fires for both authed and anonymous completions; the `anonymous`
+      // super property on the identity makes them distinguishable.
       analytics.track(analytics.EVENTS.ONBOARDING_COMPLETED, {
         role: body.role,
         intent: body.intent,
         pipeline: body.pipeline,
         pro_type: body.pro_type,
       })
-      onComplete()
+      onComplete(body)
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : 'Something went wrong. Try again?'

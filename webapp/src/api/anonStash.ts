@@ -75,3 +75,72 @@ export function clearAnonStash(): void {
     // ignore
   }
 }
+
+// ---------------------------------------------------------------------------
+// Anonymous onboarding stash — separate concern, separate key.
+//
+// The /start anonymous intake flow asks the same persona/intent questions
+// as the post-signup OnboardingWizard but has nowhere to write them yet
+// (no lead row). We stash the assembled body in localStorage so it can be
+// replayed via updateMyLead the moment the user signs up — landing them
+// straight on the right calculator with their lead already enriched.
+//
+// Kept distinct from the run stash above because:
+//   - different shape (a lead body vs. an engine run)
+//   - different replay target (PUT /api/me/lead vs. POST scenario save)
+//   - one user may legitimately have both at once (ran a calc, opened
+//     the intake wizard, signed up — we want both replayed)
+// ---------------------------------------------------------------------------
+
+const ONBOARDING_KEY = 'saveero.anon.onboarding'
+
+/**
+ * Body shape mirrored from OnboardingWizard's OnboardingBody (kept loose
+ * here so this file doesn't depend on the wizard module). The replay
+ * effect type-asserts before handing to updateMyLead.
+ */
+export interface AnonOnboarding {
+  name?: string
+  role?: string
+  intent?: string
+  pipeline?: string
+  pro_type?: string
+  /** ISO timestamp — drives the staleness window. */
+  savedAt: string
+}
+
+/** Write the latest anonymous-intake answers. Silent on storage errors. */
+export function stashAnonOnboarding(
+  body: Omit<AnonOnboarding, 'savedAt'>,
+): void {
+  try {
+    const full: AnonOnboarding = { ...body, savedAt: new Date().toISOString() }
+    localStorage.setItem(ONBOARDING_KEY, JSON.stringify(full))
+  } catch {
+    // localStorage can throw in private mode or when full — silently skip.
+  }
+}
+
+/** Read the stashed intake answers, or null if none / stale / unparseable. */
+export function readAnonOnboarding(): AnonOnboarding | null {
+  try {
+    const raw = localStorage.getItem(ONBOARDING_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as AnonOnboarding
+    if (!parsed?.savedAt) return null
+    const age = Date.now() - Date.parse(parsed.savedAt)
+    if (!Number.isFinite(age) || age > STALE_MS) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+/** Drop the onboarding stash — call after a successful replay. */
+export function clearAnonOnboarding(): void {
+  try {
+    localStorage.removeItem(ONBOARDING_KEY)
+  } catch {
+    // ignore
+  }
+}

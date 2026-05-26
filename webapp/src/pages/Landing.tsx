@@ -123,18 +123,20 @@ function TopNav() {
           >
             Sign in
           </Link>
-          {/* Top-nav primary CTA — routes into the calculator/intake
-              screen, not the auth wall. Matches Hero + ClosingCta so
-              every "Get started / Try it now" surface lands the user
-              in the same place. (Van flagged the inconsistency on
-              2026-05-26 mid-demo.) */}
+          {/* Top-nav primary CTA — routes through /start, the anonymous
+              intake wizard. The wizard then forks the user into the
+              right engine (homeowner Decision Map vs FTHB Decision Map)
+              instead of dropping them cold on the busiest calculator.
+              Matches Hero + ClosingCta so every "Get started / Try it
+              now" surface lands in the same place. (Van flagged the
+              cold-calculator landing on 2026-05-26.) */}
           <Button
             asChild
             size="sm"
             className="shadow-md transition-shadow hover:shadow-lg"
             style={{ backgroundColor: SCENARIO_PALETTE.blue }}
           >
-            <Link to="/decision-map">Get started</Link>
+            <Link to="/start">Get started</Link>
           </Button>
         </div>
       </div>
@@ -195,18 +197,22 @@ function Hero() {
             decide.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            {/* Primary CTA goes straight into the Decision Map — the
-                engine is fully usable anonymously (Van's #5 punch-list
-                item, shipped 2026-05-19). Save / Recent prompt signup;
-                pre-signup runs replay into the user's account on the
-                first signed-in load. */}
+            {/* Primary CTA goes through /start — the anonymous intake
+                wizard. The fork there (homeowner vs first-time buyer
+                vs industry pro) routes the user into the right
+                calculator with context, instead of dropping a stranger
+                cold on the homeowner Decision Map. Anonymous all the
+                way through; signup gates only Save / Contact-a-pro.
+                (Van's #5 shipped 2026-05-19 with the auth wall delay;
+                the intake fork landed 2026-05-26 after a partner-demo
+                landed too cold on the 5-scenario homeowner page.) */}
             <Button
               asChild
               size="lg"
               className="text-base shadow-lg transition-shadow hover:shadow-xl"
               style={{ backgroundColor: SCENARIO_PALETTE.blue }}
             >
-              <Link to="/decision-map">
+              <Link to="/start">
                 Try it now <ArrowRight className="ml-1 h-4 w-4" />
               </Link>
             </Button>
@@ -563,16 +569,17 @@ function ClosingCta() {
           lasts a lot longer.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          {/* Drop directly into the calculator — anonymous-friendly per
-              Van's #5. Signup only kicks in if the user wants to save
-              the scenario or contact a partner. */}
+          {/* Anonymous intake — same destination as Hero + TopNav so
+              every "Try it now / Get started" surface lands in the
+              same place. Signup only kicks in if the user wants to
+              save the scenario or contact a partner. */}
           <Button
             asChild
             size="lg"
             className="text-base shadow-lg transition-shadow hover:shadow-xl"
             style={{ backgroundColor: SCENARIO_PALETTE.rose }}
           >
-            <Link to="/decision-map">
+            <Link to="/start">
               Try it now <ArrowRight className="ml-1 h-4 w-4" />
             </Link>
           </Button>

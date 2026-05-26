@@ -4,10 +4,15 @@ import { Home as HomeIcon, House, Calculator, GitCompare, Compass, Inbox, Chevro
 import type { Session } from '@supabase/supabase-js'
 import { cn } from '@/lib/utils'
 import { supabase, signOut } from '@/api/auth'
-import { createLead, getMyProfile } from '@/api/leadsApi'
+import { createLead, getMyProfile, updateMyLead, type LeadIntent, type LeadRole } from '@/api/leadsApi'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { readAnonStash, clearAnonStash } from '@/api/anonStash'
+import {
+  readAnonStash,
+  clearAnonStash,
+  readAnonOnboarding,
+  clearAnonOnboarding,
+} from '@/api/anonStash'
 import { saveFthbAnalysis } from '@/api/fthbApi'
 import { analytics } from '@/analytics/mixpanel'
 import Dashboard from './pages/Dashboard'
@@ -30,6 +35,11 @@ const AdminCRM = lazy(() => import('./pages/AdminCRM'))
 // by default (the Dashboard's HeroTool routes them in based on lead.role).
 // Other audiences can still hit the URL directly via the sidebar nav.
 const FTHBDecisionMap = lazy(() => import('./pages/FTHBDecisionMap'))
+
+// Lazy-load StartIntake — the anonymous-friendly /start page that wraps
+// OnboardingWizard. Pre-auth surface only; signed-in users get bounced
+// to the Dashboard's inline wizard instead.
+const StartIntake = lazy(() => import('./pages/StartIntake'))
 
 type NavItem =
   | { divider: true }
@@ -161,6 +171,42 @@ export default function App() {
     return () => window.clearTimeout(t)
   }, [session?.user.id])
 
+  // Anonymous onboarding replay — if the user went through /start before
+  // signing up, the wizard stashed their persona/intent answers to
+  // localStorage instead of PUT-ing them. Now that we have a session,
+  // PUT them into the lead row so the Dashboard sees an enriched lead
+  // and skips its own onboarding gate (no double-wizard).
+  //
+  // Same pattern as the run-stash above:
+  //   - small delay so createLead's seed POST lands first
+  //   - clear on success, leave in place on failure so a transient
+  //     auth blip doesn't lose what they typed
+  useEffect(() => {
+    if (!session) return
+    const intake = readAnonOnboarding()
+    if (!intake) return
+    const t = window.setTimeout(() => {
+      const body: {
+        name?: string
+        role?: LeadRole
+        intent?: LeadIntent
+        pipeline?: string
+        pro_type?: string
+      } = {}
+      if (intake.name) body.name = intake.name
+      if (intake.role) body.role = intake.role as LeadRole
+      if (intake.intent) body.intent = intake.intent as LeadIntent
+      if (intake.pipeline) body.pipeline = intake.pipeline
+      if (intake.pro_type) body.pro_type = intake.pro_type
+      updateMyLead(body)
+        .then(() => clearAnonOnboarding())
+        .catch((err) => {
+          console.warn('[anon-onboarding-replay] failed:', err)
+        })
+    }, 300)
+    return () => window.clearTimeout(t)
+  }, [session?.user.id])
+
   // Admin probe — runs once per signed-in session. Cheap GET against
   // the user's own row (was listAllLeads, which on a cold Render dyno
   // could be a 100KB+ payload that blocked the user's parallel /leads/me
@@ -235,6 +281,17 @@ export default function App() {
           <Routes>
             {landingEnabled && <Route path="/" element={<Landing />} />}
             <Route path="/login" element={<Login />} />
+            {/* Anonymous intake — every Landing CTA points here. The
+                wizard stashes answers + routes to the right calculator
+                on completion. Replayed into the lead row on signup. */}
+            <Route
+              path="/start"
+              element={
+                <AnonymousShell>
+                  <StartIntake />
+                </AnonymousShell>
+              }
+            />
             <Route
               path="/decision-map"
               element={
@@ -362,6 +419,11 @@ export default function App() {
               <Route path="/scenarios"           element={<ScenarioComparison />} />
               <Route path="/decision-map"        element={<DecisionMap />} />
               <Route path="/fthb-decision-map"   element={<FTHBDecisionMap />} />
+              {/* /start is the anonymous intake; authed users have the
+                  wizard available inline from the Dashboard already, so
+                  bounce them home instead of running two parallel
+                  intakes. */}
+              <Route path="/start"               element={<Navigate to="/" replace />} />
               {/* Catch-all — sends the user to the dashboard if they
                   land on an unauthed-only path (most commonly /login
                   after the session is established) or a stale
