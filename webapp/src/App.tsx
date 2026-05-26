@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { Home as HomeIcon, House, Calculator, GitCompare, Compass, Inbox, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
+import { Home as HomeIcon, House, Calculator, GitCompare, Compass, Inbox, ChevronLeft, ChevronRight, LogOut, Lock } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import { cn } from '@/lib/utils'
 import { supabase, signOut } from '@/api/auth'
@@ -466,12 +466,43 @@ export default function App() {
 // on the Decision Map with no way to discover the other engine.
 // ---------------------------------------------------------------------------
 
-/** Public-only subset of the nav. Filtered from the same source the authed
- *  sidebar uses so the labels and icons stay in sync. */
-function buildAnonymousNavItems(): Array<{ to: string; label: string; icon: typeof HomeIcon }> {
+/**
+ * Anonymous-side nav. Mirrors the authed sidebar's structure but each
+ * item is tagged with whether it works without a session:
+ *
+ *   - requiresAuth: false → links normally; the page renders fine for
+ *     a logged-out visitor (engine APIs are public, save/contact
+ *     affordances degrade to SignupPrompt).
+ *   - requiresAuth: true  → renders with a Lock icon and routes to
+ *     /login?mode=signup. Every locked click is a conversion moment —
+ *     the user has signalled intent for a tool they need an account
+ *     to use, and we drop them straight into signup.
+ *
+ * 'Home' lands on Landing for anonymous users (no session → the public
+ * Routes block above mounts Landing at '/'), which is the right outcome
+ * — they can re-orient from the marketing pitch.
+ *
+ * 'List Property' and 'Compare' are the auth-only items today. List
+ * Property writes property records to the user's lead; Compare needs
+ * saved scenarios to compare. Both inherently require a session.
+ *
+ * 'Mortgage' could be opened up anonymously with a small route change,
+ * but it isn't today — until that lands, lock-icon treatment is the
+ * honest answer (and still drives a conversion event).
+ */
+type AnonymousNavItem =
+  | { divider: true }
+  | { to: string; label: string; icon: typeof HomeIcon; requiresAuth: boolean }
+
+function buildAnonymousNavItems(): AnonymousNavItem[] {
   return [
-    { to: '/decision-map',      label: 'Decision Map', icon: Compass },
-    { to: '/fthb-decision-map', label: 'FTHB',         icon: Compass },
+    { to: '/',                    label: 'Home',         icon: HomeIcon,   requiresAuth: false },
+    { to: '/decision-map',        label: 'Decision Map', icon: Compass,    requiresAuth: false },
+    { to: '/fthb-decision-map',   label: 'FTHB',         icon: Compass,    requiresAuth: false },
+    { to: '/mortgage-calculator', label: 'Mortgage',     icon: Calculator, requiresAuth: true  },
+    { to: '/scenarios',           label: 'Compare',      icon: GitCompare, requiresAuth: true  },
+    { divider: true },
+    { to: '/list-property',       label: 'List Property', icon: House,     requiresAuth: true  },
   ]
 }
 
@@ -524,14 +555,40 @@ function AnonymousShell({ children }: { children: React.ReactNode }) {
           )}
         </Link>
 
-        {/* Nav — public calculators only. */}
+        {/* Nav — full tool set, with auth-only items rendered with a
+            Lock icon and routed to /login?mode=signup. Surfacing
+            everything (rather than hiding) turns each locked click
+            into a conversion event: the user has signalled intent
+            for a tool they want, and we drop them straight into the
+            signup form. */}
         <nav className="flex-1 py-4 space-y-1 px-2">
-          {navItems.map(({ to, label, icon: Icon }) => {
-            const active = pathname === to
+          {navItems.map((item, idx) => {
+            if ('divider' in item) {
+              return (
+                <div
+                  key={`anon-divider-${idx}`}
+                  className="my-2 mx-3 border-t border-stone-700"
+                  aria-hidden="true"
+                />
+              )
+            }
+            const { to, label, icon: Icon, requiresAuth } = item
+            // Auth-only items don't navigate to the route they label;
+            // they navigate to signup. Active highlight is suppressed
+            // because the user is never actually on that route while
+            // anonymous.
+            const linkTarget = requiresAuth ? '/login?mode=signup' : to
+            const active = !requiresAuth && pathname === to
             return (
               <Link
                 key={to}
-                to={to}
+                to={linkTarget}
+                title={
+                  requiresAuth ? `Sign up to use ${label}` : undefined
+                }
+                aria-label={
+                  requiresAuth ? `${label} (sign up required)` : label
+                }
                 className={cn(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   active
@@ -540,7 +597,18 @@ function AnonymousShell({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <Icon size={18} className="shrink-0" />
-                {!collapsed && <span>{label}</span>}
+                {!collapsed && (
+                  <span className="flex-1 flex items-center justify-between gap-2">
+                    <span>{label}</span>
+                    {requiresAuth && (
+                      <Lock
+                        size={12}
+                        className="shrink-0 opacity-60"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </span>
+                )}
               </Link>
             )
           })}
