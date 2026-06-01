@@ -247,15 +247,19 @@ function Hero() {
           </p>
         </div>
 
-        {/* Hero illustration — full PNG, no crop. */}
+        {/* Hero illustration — dedicated hero.png (2026-06-01). Previously
+            reused stay.png, which read too old for the broader audience
+            once FTHB became first-class (Van's deck slide 1). The new
+            illustration anchors on SCENARIO_PALETTE.blue and skews
+            younger / cooler-toned to match the page's overall palette. */}
         <div className="relative">
           <div
             className="aspect-square w-full overflow-hidden rounded-2xl shadow-lg ring-1 ring-border"
             style={{ backgroundColor: `${SCENARIO_PALETTE.blue}10` }}
           >
             <img
-              src="/illustrations/stay.png"
-              alt="A cottage home illustration"
+              src="/illustrations/hero.png"
+              alt="A young couple sitting on the steps of their cottage home"
               className="h-full w-full object-cover"
               loading="eager"
             />
