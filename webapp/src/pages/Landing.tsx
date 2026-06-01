@@ -55,7 +55,7 @@ import {
 
 interface ScenarioCard {
   /** Filename in /illustrations/<scene>.png */
-  scene: 'stay' | 'refinance' | 'sell_buy' | 'rent' | 'rent_out_buy'
+  scene: 'stay' | 'refinance' | 'sell_buy' | 'rent' | 'rent_out_buy' | 'fthb'
   label: string
   blurb: string
   color: string
@@ -97,6 +97,22 @@ const SCENARIOS: ScenarioCard[] = [
     blurb: 'Two homes, two mortgages. The most upside, the most risk — see if the math actually works.',
     color: SCENARIO_PALETTE.rose,
     icon: KeyRound,
+  },
+  // Sixth card added per Van's deck slide 3 (2026-06-01). Surfaces the
+  // FTHB engine as a first-class scenario on the marketing surface so
+  // first-time buyers don't have to read past five homeowner-only paths
+  // before seeing themselves represented.
+  //
+  // TODO(art): /illustrations/fthb.png is currently a placeholder copy
+  // of decision.png. Swap with a FTHB-specific illustration (younger
+  // demographic, "first keys" feel) when art lands.
+  {
+    scene: 'fthb',
+    label: 'Buy your first home',
+    blurb:
+      'Understand what you can afford and how homeownership could shape your financial future.',
+    color: SCENARIO_PALETTE.teal,
+    icon: Sparkles,
   },
 ]
 
@@ -184,16 +200,22 @@ function Hero() {
             <Sparkles className="h-3 w-3" />
             For your biggest financial decision
           </div>
+          {/* H1: "move" -> "decision" per Van's deck slide 1 (2026-06-01).
+              The product now serves first-time buyers too, so the homeowner-
+              centric "move" framing read wrong to a chunk of the audience. */}
           <h1
             ref={headingRef}
             className="text-4xl font-bold tracking-tight text-foreground md:text-5xl lg:text-6xl"
           >
-            Make your next home move with{' '}
+            Make your next home decision with{' '}
             <span style={{ color: SCENARIO_PALETTE.blue }}>confidence.</span>
           </h1>
+          {/* Subhead: expanded scope (adds buy/invest, drops "all five paths"
+              count) so the copy doesn't go stale every time we add a sixth
+              path — and so FTHB feels first-class, not bolted on. */}
           <p className="mt-6 max-w-xl text-lg text-stone-600 md:text-xl">
-            Stay, refinance, sell, rent, or rent it out — Saveero models all five
-            paths side by side so you can see the real numbers before you
+            Buy, stay, refinance, sell, rent, or invest — Saveero models your
+            options side by side so you can see the real numbers before you
             decide.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -274,47 +296,44 @@ function FiveScenarios() {
     >
       <div className="mx-auto max-w-6xl px-6">
         <div ref={headerRef} className="mx-auto max-w-2xl text-center">
+          {/* Eyebrow / H2 / subhead all rewritten per Van's deck slide 2
+              (2026-06-01). Drops the brittle "five paths" count so the copy
+              flexes as scenarios are added (FTHB is the sixth), and reframes
+              the value prop around "see your real options" rather than
+              "every door modeled the same way" — the latter read flat in
+              demos. */}
           <p
             className="text-sm font-semibold uppercase tracking-wide"
             style={{ color: SCENARIO_PALETTE.emerald }}
           >
-            The five paths
+            One decision, multiple paths
           </p>
           <h2
             ref={headingRef}
             className="mt-3 text-3xl font-bold tracking-tight md:text-4xl"
           >
-            Every door in front of you, modeled the same way.
+            See every realistic option before you commit to one.
           </h2>
           <p className="mt-4 text-lg text-stone-600">
-            Most calculators answer one question. Saveero answers all five at
-            once — so you can compare them on the same axis instead of guessing
-            which scenario you should even be running.
+            Most calculators answer one question. Saveero models multiple paths
+            side by side so you can compare outcomes.
           </p>
         </div>
 
         <div
           ref={gridRef}
-          className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-6"
+          className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
         >
-          {SCENARIOS.map((s, i) => {
+          {SCENARIOS.map((s) => {
             const Icon = s.icon
-            // 5 cards in a 6-col lg grid where each card spans 2 cols:
-            //   row 1: cards 0/1/2 -> cols 1-2, 3-4, 5-6 (full row)
-            //   row 2: cards 3/4   -> cols 2-3, 4-5 (centered, col 1
-            //                         and col 6 empty in equal measure)
-            // Pushing card 3 to col-start-2 leaves the leftover space
-            // split evenly on both sides of the pair = truly centered.
-            // On sm/md the cards left-pack naturally — no override.
-            const orphanCenter = i === 3 ? 'lg:col-start-2' : ''
+            // 6 cards in a 3-col lg grid — two clean rows of three. The old
+            // "orphan-center the 5th card" workaround was removed when
+            // FTHB became the 6th card (2026-06-01).
             return (
               <div
                 key={s.scene}
                 data-fade
-                className={cn(
-                  'group overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border transition-shadow hover:shadow-xl lg:col-span-2',
-                  orphanCenter,
-                )}
+                className="group overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border transition-shadow hover:shadow-xl"
               >
                 <div
                   className="aspect-[16/10] overflow-hidden"
@@ -363,9 +382,12 @@ function HowItWorks() {
     },
     {
       n: '02',
-      label: 'See all five paths at once',
+      // Label rewritten per Van's deck slide 4 (2026-06-01) — drops the
+      // brittle "five paths" count. Body updated in lockstep so the list
+      // of scenarios isn't homeowner-only and includes the FTHB path.
+      label: 'Compare your options side by side',
       body:
-        'We build the same five-year wealth picture for staying, refinancing, selling & buying, renting, and renting & buying.',
+        'We build the same five-year wealth picture across every path that fits — staying, refinancing, selling, renting, or buying your first home.',
       color: SCENARIO_PALETTE.emerald,
     },
     {
@@ -400,11 +422,15 @@ function HowItWorks() {
           >
             How it works
           </p>
+          {/* H2 reworded per Van's deck slide 4 (2026-06-01) — "should I
+              move?" was homeowner-centric, and the broader audience now
+              includes first-time buyers asking "should I buy?". "What
+              should I do?" covers both. */}
           <h2
             ref={headingRef}
             className="mt-3 text-3xl font-bold tracking-tight md:text-4xl"
           >
-            Three steps from "should I move?" to "here's why."
+            Three steps from "what should I do?" to "here's why."
           </h2>
         </div>
         <div ref={gridRef} className="mt-14 grid gap-8 md:grid-cols-3">

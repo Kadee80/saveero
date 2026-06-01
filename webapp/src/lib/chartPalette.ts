@@ -26,6 +26,9 @@ export const SCENARIO_PALETTE = {
   amber: '#d9a13d',
   /** rent_out_buy — terracotta */
   rose: '#c8704c',
+  /** fthb (buy your first home) — dusty seafoam teal; warm enough to sit
+   *  beside emerald without clashing, cool enough to read distinctly. */
+  teal: '#5a9a8e',
 } as const
 
 /**
