@@ -46,12 +46,18 @@ import { HelpTip } from '@/components/HelpTip'
 // ---------------------------------------------------------------------------
 
 export type FieldKind =
-  | 'money'    // prefix "$", integer-ish step
-  | 'percent'  // stored as decimal (0.067), displayed as whole number (6.7), suffix "%"
-  | 'months'   // suffix "mo"
-  | 'years'    // suffix "yr"
-  | 'number'   // bare number
-  | 'bool'     // checkbox
+  | 'money'           // prefix "$", integer-ish step
+  | 'percent'         // stored as decimal (0.067), displayed as whole number (6.7), suffix "%"
+  | 'months'          // suffix "mo"
+  | 'years'           // suffix "yr"
+  // Stored as months (canonical, what the engine wants) but displayed
+  // as years (whole number) with a "yr" suffix. Same pattern as
+  // 'percent' — canonical decimal stored, whole-number displayed.
+  // Added 2026-06-01 for Van's deck rename of `remaining_term_months`
+  // to "Years Remaining on Mortgage" without touching the engine.
+  | 'months_as_years'
+  | 'number'          // bare number
+  | 'bool'            // checkbox
 
 export interface FieldDef {
   /** Key into the consumer's values object. */
@@ -135,29 +141,36 @@ export function InputWizard({
     >
       <div className="p-6 md:p-8">
         <ProgressStrip
+          steps={steps}
           current={safeStep}
-          total={steps.length}
           accentColor={accentColor}
         />
 
-        <header className="mt-6">
+        {/* Step heading — larger and more breathing room per Van's deck
+            (2026-06-01: "Use larger typography hierarchy. Current
+            hierarchy is too flat."). The icon chip stays as the visual
+            anchor; title bumps from text-xl to text-2xl/3xl and the
+            description picks up a touch more weight + space. */}
+        <header className="mt-8">
           <div
             className="inline-flex rounded-md p-2"
             style={{ backgroundColor: `${accentColor}1a` }}
           >
             <Icon className="h-5 w-5" style={{ color: accentColor }} />
           </div>
-          <h2 className="mt-3 text-xl font-bold tracking-tight">
+          <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">
             {current.title}
           </h2>
           {current.description && (
-            <p className="mt-1 text-sm text-stone-600">{current.description}</p>
+            <p className="mt-2 max-w-2xl text-base text-stone-600">
+              {current.description}
+            </p>
           )}
         </header>
 
         {/* Step body. min-h keeps the card height stable across steps so
             the footer doesn't jump as the user clicks Next. */}
-        <div className="mt-5 min-h-[260px]">
+        <div className="mt-7 min-h-[260px]">
           <div className="grid gap-4 sm:grid-cols-2">
             {current.fields.map((f) => (
               <FieldControl
@@ -218,59 +231,97 @@ export function InputWizard({
 }
 
 // ---------------------------------------------------------------------------
-// Progress strip — N numbered dots connected by line segments. Completed
-// steps fill + show a check; the active step fills; future steps are outline.
+// Progress strip — numbered dots connected by line segments with each step's
+// icon + title labeled beneath. Completed steps fill + show a check; the
+// active step fills with its label emphasized; future steps stay outline-only
+// with muted labels.
+//
+// Labels only render on md+ viewports — at narrow widths the 7-step
+// label row collapses into the title pattern shown next to the icon chip
+// below the strip, so the small-screen experience isn't a wall of
+// truncated labels.
+//
+// Per Van's deck (2026-06-01): the bare numbered strip read like a loan
+// application; named steps turn it into a guided journey ("Your Home →
+// ... → Recommendation") rather than "step 1 of 7."
 // ---------------------------------------------------------------------------
 
 function ProgressStrip({
+  steps,
   current,
-  total,
   accentColor,
 }: {
+  steps: WizardStep[]
   current: number
-  total: number
   accentColor: string
 }) {
-  const dots = Array.from({ length: total }, (_, i) => i)
+  const total = steps.length
   return (
     <div
-      className="flex items-center gap-2"
       role="progressbar"
       aria-valuemin={1}
       aria-valuemax={total}
       aria-valuenow={current + 1}
       aria-label={`Step ${current + 1} of ${total}`}
     >
-      {dots.map((n, i) => {
-        const isActive = n === current
-        const isDone = n < current
-        return (
-          <div key={n} className="flex flex-1 items-center gap-2">
-            <span
-              className={cn(
-                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
-                isActive || isDone
-                  ? 'border-transparent text-white'
-                  : 'border-border bg-card text-stone-400',
-              )}
-              style={
-                isActive || isDone ? { backgroundColor: accentColor } : undefined
-              }
-            >
-              {isDone ? <Check className="h-3.5 w-3.5" /> : n + 1}
-            </span>
-            {i < dots.length - 1 && (
+      {/* Dot row — same dots + connector pattern as before. */}
+      <div className="flex items-center gap-2">
+        {steps.map((_, i) => {
+          const isActive = i === current
+          const isDone = i < current
+          return (
+            <div key={i} className="flex flex-1 items-center gap-2">
               <span
-                aria-hidden="true"
-                className="h-px flex-1 transition-colors"
-                style={{
-                  backgroundColor: isDone ? accentColor : 'var(--border, #e7e5e4)',
-                }}
-              />
-            )}
-          </div>
-        )
-      })}
+                className={cn(
+                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
+                  isActive || isDone
+                    ? 'border-transparent text-white'
+                    : 'border-border bg-card text-stone-400',
+                )}
+                style={
+                  isActive || isDone ? { backgroundColor: accentColor } : undefined
+                }
+              >
+                {isDone ? <Check className="h-3.5 w-3.5" /> : i + 1}
+              </span>
+              {i < total - 1 && (
+                <span
+                  aria-hidden="true"
+                  className="h-px flex-1 transition-colors"
+                  style={{
+                    backgroundColor: isDone ? accentColor : 'var(--border, #e7e5e4)',
+                  }}
+                />
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Step label row — md+ only. Each label sits under its dot
+          (flex-1 cells line up with the dot row above). Icon left,
+          title right, both styled by step state. */}
+      <div className="mt-2 hidden gap-2 md:flex">
+        {steps.map((step, i) => {
+          const StepIcon = step.icon
+          const isActive = i === current
+          const isDone = i < current
+          return (
+            <div
+              key={i}
+              className={cn(
+                'flex min-w-0 flex-1 items-center gap-1 text-xs leading-tight transition-colors',
+                isActive ? 'font-semibold' : 'font-normal',
+                !isActive && (isDone ? 'text-stone-500' : 'text-stone-400'),
+              )}
+              style={isActive ? { color: accentColor } : undefined}
+            >
+              <StepIcon className="h-3 w-3 shrink-0" />
+              <span className="truncate">{step.title}</span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -309,16 +360,21 @@ function FieldControl({
 
   const numericValue = typeof value === 'number' ? value : 0
   const isPercent = def.kind === 'percent'
-  // Percent fields store a decimal but display a whole number.
+  // `months_as_years` stores months canonically (what the engine wants)
+  // but shows the user whole years. Same pattern as percent (decimal
+  // stored / whole-number displayed).
+  const isMonthsAsYears = def.kind === 'months_as_years'
   const displayValue = isPercent
     ? Math.round(numericValue * 100 * 1e4) / 1e4
-    : numericValue
+    : isMonthsAsYears
+      ? Math.round(numericValue / 12)
+      : numericValue
 
   const prefix = def.kind === 'money' ? '$' : ''
   const suffix =
     def.kind === 'percent' ? '%'
     : def.kind === 'months' ? 'mo'
-    : def.kind === 'years' ? 'yr'
+    : def.kind === 'years' || def.kind === 'months_as_years' ? 'yr'
     : ''
   const step =
     def.kind === 'percent' ? '0.01'
@@ -348,7 +404,13 @@ function FieldControl({
           onChange={(e) => {
             const raw = e.target.value === '' ? 0 : Number(e.target.value)
             if (Number.isNaN(raw)) return
-            onChange(isPercent ? raw / 100 : raw)
+            // Convert back into canonical units before bubbling up.
+            const canonical = isPercent
+              ? raw / 100
+              : isMonthsAsYears
+                ? raw * 12
+                : raw
+            onChange(canonical)
           }}
         />
         {suffix && (

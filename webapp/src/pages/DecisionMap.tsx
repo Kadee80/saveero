@@ -123,15 +123,24 @@ const SCENARIO_CONFIG = {
 
 const STEPS: WizardStep[] = [
   {
-    title: 'Current home & mortgage',
+    // Step title + description rewritten per Van's deck (2026-06-01):
+    // "Current home & mortgage / What you own today" read like a loan-
+    // application section header. Warmer, lower-stakes framing here.
+    title: 'Tell us about your home',
     icon: Home,
-    description: 'What you own today.',
+    description:
+      'Just a few details to help us build your decision map. Approximate numbers are perfectly fine.',
     fields: [
-      { key: 'hold_years', label: 'Hold period', kind: 'years', help: 'decisionmap.input.hold_years' },
+      // Conversational question per Van's deck — replaces nominal
+      // "Hold period". The 'years' kind unchanged (already canonical).
+      { key: 'hold_years', label: 'How long do you expect to keep the home?', kind: 'years', help: 'decisionmap.input.hold_years' },
       { key: 'current_home_value', label: 'Current home value', kind: 'money', help: 'decisionmap.input.current_home_value' },
       { key: 'current_mortgage_balance', label: 'Mortgage balance', kind: 'money', help: 'decisionmap.input.current_mortgage_balance' },
       { key: 'current_mortgage_rate', label: 'Mortgage rate', kind: 'percent', help: 'decisionmap.input.current_mortgage_rate' },
-      { key: 'remaining_term_months', label: 'Remaining term', kind: 'months', help: 'decisionmap.input.remaining_term_months' },
+      // Same field, rebranded + redisplayed. Engine still ingests
+      // months (key unchanged) — the new 'months_as_years' kind
+      // converts at the wizard boundary the same way percent does.
+      { key: 'remaining_term_months', label: 'Years Remaining on Mortgage', kind: 'months_as_years', help: 'decisionmap.input.remaining_term_months' },
       { key: 'monthly_property_tax', label: 'Property tax', kind: 'money', hint: '/mo', help: 'decisionmap.input.monthly_property_tax' },
       { key: 'monthly_insurance', label: 'Insurance', kind: 'money', hint: '/mo', help: 'decisionmap.input.monthly_insurance' },
       { key: 'monthly_hoa', label: 'HOA', kind: 'money', hint: '/mo', help: 'decisionmap.input.monthly_hoa' },
