@@ -63,6 +63,10 @@ If you can't describe what you did in one line, you either changed too many thin
 
 ## Branching
 
+We use **GitHub Flow**. One long-lived branch (`main`), short-lived feature branches, PR to merge. `main` is always deployable.
+
+A second long-lived branch — `staging` — exists for full-stack preview deploys (see Preview URLs below). Don't develop on it; push your feature branch onto it temporarily to get a preview, then merge the original PR to `main`.
+
 Branch off `main`. Name branches using this pattern:
 
 ```
@@ -84,17 +88,68 @@ Delete branches after they are merged. Do not leave stale branches sitting aroun
 
 ## Pull Requests
 
-Every change to `main` goes through a PR. No direct commits to main.
+Every change to `main` goes through a PR. No direct commits to main. Branch protection enforces this — direct push will be rejected.
 
 **PR title** = the same format as a commit message.
 
-**PR description** must include:
-- What this PR does (one paragraph)
-- How to test it manually
-- Any database migrations needed
-- Screenshots for UI changes
+**PR description** uses the template at `.github/PULL_REQUEST_TEMPLATE.md`. Three short sections (What / Why / Testing notes) and a flags checklist. Reviewers should be able to start reviewing within 30 seconds of opening the PR.
 
 Keep PRs small and focused. A PR that touches the database schema, the API layer, and three frontend components is three PRs.
+
+### Merge strategy
+
+**Squash + merge.** One commit per PR on `main`, easy to revert, clean history. Use the PR title as the commit message — rewrite it if your branch commits got messy. Merge commits and rebase merges are disabled in the repo settings.
+
+### Review
+
+When there are 2+ devs on the team, every PR needs at least one approving review. Self-merge is fine while solo. Branch protection should reflect whichever state the team is in.
+
+---
+
+## CI must pass
+
+GitHub Actions runs on every PR (`.github/workflows/ci.yml`):
+
+| Job | What it does |
+|---|---|
+| `backend (pytest)` | Installs `requirements.txt`, runs the full pytest suite (engine golden tests, lead routes, notifications) |
+| `backend (smoke-import)` | `python -c "from main import app"` — catches broken router registration before tests even run |
+| `frontend (tsc + vite build)` | Type-check + production build. The build step catches lazy-chunk import issues that tsc alone misses |
+
+Both jobs must be green to merge. They take about 2 minutes total.
+
+If you find yourself wanting to merge despite a failure, the right move is to fix the failure, not bypass it. Flaky tests get an issue + a fix; they don't get skipped.
+
+---
+
+## Preview URLs
+
+### Frontend-only changes — Vercel handles it
+
+Vercel auto-creates a preview deployment for every PR. The bot drops the URL into the PR as a comment. The preview is a full frontend build that talks to the **production** Render backend. Good enough for UI tweaks, copy changes, frontend refactors.
+
+### Backend changes — push to staging
+
+Touching `api/`, `portfolio/`, `scenarios/`, `mortgage/`, `core/`, or anything Python? The Vercel preview can't see those — it talks to prod. Push your branch to `staging`:
+
+```bash
+git push origin <your-branch>:staging --force-with-lease
+```
+
+That triggers two redeploys:
+
+- `saveero-staging.onrender.com` rebuilds with your branch
+- The staging Vercel project rebuilds, with `RENDER_API_HOST` already pointed at staging
+
+The staging frontend URL goes in the PR description so the reviewer can see the change end-to-end.
+
+Once your PR is approved + merged, prod auto-deploys from `main` as usual.
+
+### Why two paths
+
+Vercel's preview URLs are free + automatic. Render's preview environments are a paid feature. The `staging` branch + the second Render service is the workaround — a real full-stack preview when we need one, no monthly cost.
+
+---
 
 ---
 

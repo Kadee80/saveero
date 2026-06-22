@@ -1,0 +1,80 @@
+name: CI
+
+# Runs on every PR + every push to main. PR runs gate the merge button
+# via GitHub branch protection (see CONTRIBUTING.md). Push-to-main runs
+# serve as a safety net for direct commits if branch protection ever
+# slips.
+
+on:
+  pull_request:
+    branches: [main, staging]
+  push:
+    branches: [main]
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Backend — tests + import-check.
+  # Engine math + lead routes + notifications all have unit tests; this
+  # is the contract that gates merge for anything in portfolio/,
+  # scenarios/, mortgage/, api/, core/.
+  # ---------------------------------------------------------------------
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Smoke-import main
+        # Catches broken imports / typos in router registration before
+        # we bother running tests. Faster failure when someone forgets
+        # to update main.py.
+        run: |
+          python -c "from main import app; print(f'app loaded with {len(app.routes)} routes')"
+
+      - name: Run pytest
+        run: pytest -q
+
+  # ---------------------------------------------------------------------
+  # Frontend — type-check + production build.
+  # tsc catches type errors; vite build catches lazy-chunk + import
+  # issues that tsc alone misses (e.g. a wrong path in a lazy import
+  # doesn't fail tsc but breaks at runtime).
+  # ---------------------------------------------------------------------
+  frontend:
+    name: Frontend (tsc + vite build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webapp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Production build
+        # Catches issues tsc alone misses — e.g. a lazy import path
+        # that's wrong, or a vite plugin failing on a new asset.
+        run: npx vite build
