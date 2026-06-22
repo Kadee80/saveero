@@ -46,6 +46,11 @@ const FTHBDecisionMap = lazy(() => import('./pages/FTHBDecisionMap'))
 // to the Dashboard's inline wizard instead.
 const StartIntake = lazy(() => import('./pages/StartIntake'))
 
+// Lazy-load PortfolioBuilder — the third Home Planner branch (investor
+// path). First-stab v1 ships with the engine wired through and a
+// seeded sample render; full intake wizard follows.
+const PortfolioBuilder = lazy(() => import('./pages/PortfolioBuilder'))
+
 type NavItem =
   | { divider: true }
   | { to: string; label: string; icon: typeof HomeIcon }
@@ -314,6 +319,14 @@ export default function App() {
               }
             />
             <Route
+              path="/portfolio-builder"
+              element={
+                <AnonymousShell>
+                  <PortfolioBuilder />
+                </AnonymousShell>
+              }
+            />
+            <Route
               path="*"
               element={landingEnabled ? <Navigate to="/login" replace /> : <Login />}
             />
@@ -424,6 +437,7 @@ export default function App() {
               <Route path="/scenarios"           element={<ScenarioComparison />} />
               <Route path="/decision-map"        element={<DecisionMap />} />
               <Route path="/fthb-decision-map"   element={<FTHBDecisionMap />} />
+              <Route path="/portfolio-builder"   element={<PortfolioBuilder />} />
               {/* /start is the anonymous intake; authed users have the
                   wizard available inline from the Dashboard already, so
                   bounce them home instead of running two parallel

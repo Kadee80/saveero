@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
+  Building2,
   Calculator,
   Clock,
   Compass,
@@ -423,7 +424,7 @@ function SecondaryCard({
 // framing, owners get the neutral framing.
 function SecondaryTools({ isFTHB }: { isFTHB: boolean }) {
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid gap-6 md:grid-cols-3">
       <SecondaryCard
         to="/mortgage-calculator"
         icon={Calculator}
@@ -447,6 +448,16 @@ function SecondaryTools({ isFTHB }: { isFTHB: boolean }) {
             ? 'Stack up to three financing options — different down payments, terms, or rates — side by side before you commit.'
             : 'Stack up to three financing scenarios — different down payments, terms, or rates — and pick the winner.'
         }
+      />
+      {/* Third Home Planner branch — Portfolio. First-stab v1 ships
+          with engine wired through; intake wizard follows. */}
+      <SecondaryCard
+        to="/portfolio-builder"
+        icon={Building2}
+        color={SCENARIO_PALETTE.teal}
+        eyebrow="New — first stab"
+        title="Portfolio Builder"
+        blurb="Compare strategies for acquiring your next property — Cash, HELOC, DSCR, No-Ratio, Combination, and more — given your existing portfolio."
       />
     </div>
   )
