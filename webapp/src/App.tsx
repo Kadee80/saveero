@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { Home as HomeIcon, House, Calculator, GitCompare, Compass, Inbox, ChevronLeft, ChevronRight, LogOut, Lock } from 'lucide-react'
+import { Home as HomeIcon, House, Calculator, GitCompare, Compass, Inbox, Building2, ChevronLeft, ChevronRight, LogOut, Lock } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import { cn } from '@/lib/utils'
 import { supabase, signOut } from '@/api/auth'
@@ -72,6 +72,11 @@ function buildNavItems(isAdmin: boolean): NavItem[] {
     { to: '/fthb-decision-map',   label: 'FTHB',         icon: Compass     },
     { to: '/mortgage-calculator', label: 'Mortgage',     icon: Calculator  },
     { to: '/scenarios',           label: 'Compare',      icon: GitCompare  },
+    // Portfolio engine — third Home Planner branch (investor / multi-
+    // property). First stab shipped 2026-06-22 with placeholder
+    // weighting matrix; visible in sidebar so it's reachable from any
+    // page during the Van/team review.
+    { to: '/portfolio-builder',   label: 'Portfolio',    icon: Building2   },
   ]
   if (isAdmin) {
     primary.push({ to: '/admin/crm', label: 'CRM', icon: Inbox })
