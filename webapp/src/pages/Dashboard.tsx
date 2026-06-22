@@ -31,7 +31,7 @@ import { getUser } from '@/api/auth'
 import { createLead, getMyLead, type Lead } from '@/api/leadsApi'
 import { listAnalyses, type SavedAnalysisSummary } from '@/api/mortgageApi'
 import { listFthbAnalyses, type SavedFthbAnalysisSummary } from '@/api/fthbApi'
-import { formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { SCENARIO_PALETTE } from '@/lib/chartPalette'
 import OnboardingWizard from '@/pages/OnboardingWizard'
 
@@ -422,9 +422,20 @@ function SecondaryCard({
 // tools, useful whether you already own or are buying your first home.
 // Only the copy is forked: buyers get a "home you're considering"
 // framing, owners get the neutral framing.
+//
+// The Portfolio Builder tile is gated by VITE_PORTFOLIO_ENABLED — when
+// off (the default) the grid drops to 2 columns and behaves as before.
+// Same flag drives the sidebar nav item + the route registration in
+// App.tsx, so the entire surface is either fully visible or fully
+// invisible.
+const PORTFOLIO_ENABLED = import.meta.env.VITE_PORTFOLIO_ENABLED === 'true'
+
 function SecondaryTools({ isFTHB }: { isFTHB: boolean }) {
   return (
-    <div className="grid gap-6 md:grid-cols-3">
+    <div className={cn(
+      'grid gap-6',
+      PORTFOLIO_ENABLED ? 'md:grid-cols-3' : 'md:grid-cols-2',
+    )}>
       <SecondaryCard
         to="/mortgage-calculator"
         icon={Calculator}
@@ -449,16 +460,16 @@ function SecondaryTools({ isFTHB }: { isFTHB: boolean }) {
             : 'Stack up to three financing scenarios — different down payments, terms, or rates — and pick the winner.'
         }
       />
-      {/* Third Home Planner branch — Portfolio. First-stab v1 ships
-          with engine wired through; intake wizard follows. */}
-      <SecondaryCard
-        to="/portfolio-builder"
-        icon={Building2}
-        color={SCENARIO_PALETTE.teal}
-        eyebrow="New — first stab"
-        title="Portfolio Builder"
-        blurb="Compare strategies for acquiring your next property — Cash, HELOC, DSCR, No-Ratio, Combination, and more — given your existing portfolio."
-      />
+      {PORTFOLIO_ENABLED && (
+        <SecondaryCard
+          to="/portfolio-builder"
+          icon={Building2}
+          color={SCENARIO_PALETTE.teal}
+          eyebrow="New — first stab"
+          title="Portfolio Builder"
+          blurb="Compare strategies for acquiring your next property — Cash, HELOC, DSCR, No-Ratio, Combination, and more — given your existing portfolio."
+        />
+      )}
     </div>
   )
 }

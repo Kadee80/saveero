@@ -51,6 +51,16 @@ const StartIntake = lazy(() => import('./pages/StartIntake'))
 // seeded sample render; full intake wizard follows.
 const PortfolioBuilder = lazy(() => import('./pages/PortfolioBuilder'))
 
+// Portfolio feature flag. Set VITE_PORTFOLIO_ENABLED=true in env to
+// surface the route, nav item, and Dashboard tile. Default off because
+// the page currently shows "for discussion" banners with placeholder
+// scoring + the weighting matrix isn't finalized. Flip in Vercel env
+// vars + redeploy once the matrix lands and the banners come out.
+//
+// Evaluated at build time (Vite bakes env vars in), so toggling
+// requires a redeploy — not a runtime change.
+const PORTFOLIO_ENABLED = import.meta.env.VITE_PORTFOLIO_ENABLED === 'true'
+
 type NavItem =
   | { divider: true }
   | { to: string; label: string; icon: typeof HomeIcon }
@@ -72,12 +82,11 @@ function buildNavItems(isAdmin: boolean): NavItem[] {
     { to: '/fthb-decision-map',   label: 'FTHB',         icon: Compass     },
     { to: '/mortgage-calculator', label: 'Mortgage',     icon: Calculator  },
     { to: '/scenarios',           label: 'Compare',      icon: GitCompare  },
-    // Portfolio engine — third Home Planner branch (investor / multi-
-    // property). First stab shipped 2026-06-22 with placeholder
-    // weighting matrix; visible in sidebar so it's reachable from any
-    // page during the Van/team review.
-    { to: '/portfolio-builder',   label: 'Portfolio',    icon: Building2   },
   ]
+  // Portfolio nav item gated by the same feature flag as the route.
+  if (PORTFOLIO_ENABLED) {
+    primary.push({ to: '/portfolio-builder', label: 'Portfolio', icon: Building2 })
+  }
   if (isAdmin) {
     primary.push({ to: '/admin/crm', label: 'CRM', icon: Inbox })
   }
@@ -323,14 +332,16 @@ export default function App() {
                 </AnonymousShell>
               }
             />
-            <Route
-              path="/portfolio-builder"
-              element={
-                <AnonymousShell>
-                  <PortfolioBuilder />
-                </AnonymousShell>
-              }
-            />
+            {PORTFOLIO_ENABLED && (
+              <Route
+                path="/portfolio-builder"
+                element={
+                  <AnonymousShell>
+                    <PortfolioBuilder />
+                  </AnonymousShell>
+                }
+              />
+            )}
             <Route
               path="*"
               element={landingEnabled ? <Navigate to="/login" replace /> : <Login />}
@@ -442,7 +453,9 @@ export default function App() {
               <Route path="/scenarios"           element={<ScenarioComparison />} />
               <Route path="/decision-map"        element={<DecisionMap />} />
               <Route path="/fthb-decision-map"   element={<FTHBDecisionMap />} />
-              <Route path="/portfolio-builder"   element={<PortfolioBuilder />} />
+              {PORTFOLIO_ENABLED && (
+                <Route path="/portfolio-builder" element={<PortfolioBuilder />} />
+              )}
               {/* /start is the anonymous intake; authed users have the
                   wizard available inline from the Dashboard already, so
                   bounce them home instead of running two parallel
