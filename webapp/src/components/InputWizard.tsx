@@ -40,7 +40,7 @@ import {
 import { cn } from '@/lib/utils'
 import { getMyLead } from '@/api/leadsApi'
 import { HelpTip } from '@/components/HelpTip'
-import { useFadeInOnMount } from '@/hooks/useGsapFadeIn'
+import { useFadeInOnMount, useSplitWordsIn } from '@/hooks/useGsapFadeIn'
 
 // ---------------------------------------------------------------------------
 // Public types — consumers build their `steps` from these.
@@ -146,19 +146,24 @@ export function InputWizard({
   const Icon = current.icon
   const isLast = safeStep === steps.length - 1
 
-  // Step-entrance animations. Description + illustration fade in on
-  // every step change so the eye lands on what's actually new. The
-  // heading is left alone — Katie 2026-06-10: animating the heading
-  // re-runs felt clunky and pulled focus from the description copy,
-  // which is what actually changes step-to-step in a way the user
-  // needs to absorb. Bails out cleanly under prefers-reduced-motion
-  // via the underlying hooks.
+  // Step-entrance animations. Description splits into words and
+  // staggers in (instead of fading as a single block — Katie
+  // 2026-06-23: the block fade was reading as "by line" because the
+  // text wraps; per-word stagger gives it real motion at the prompt
+  // level). Illustration still fades as one piece on every step
+  // change. The heading is left alone — Katie 2026-06-10: animating
+  // the heading re-runs felt clunky and pulled focus from the
+  // description copy, which is what actually changes step-to-step in
+  // a way the user needs to absorb. Bails out cleanly under
+  // prefers-reduced-motion via the underlying hooks.
   const descRef = useRef<HTMLParagraphElement>(null)
   const illustrationRef = useRef<HTMLDivElement>(null)
-  useFadeInOnMount(descRef, {
-    y: 12,
+  useSplitWordsIn(descRef, {
+    y: 10,
     duration: 0.5,
     delay: 0.1,
+    stagger: 0.025,
+    trigger: 'mount',
     triggerKey: safeStep,
   })
   useFadeInOnMount(illustrationRef, {
