@@ -222,7 +222,17 @@ export function InputWizard({
             >
               <Icon className="h-5 w-5" style={{ color: accentColor }} />
             </div>
+            {/* key={safeStep} forces React to fully remount the
+                heading + description on every step change. Without
+                this, SplitText (which mutates DOM children outside
+                React's virtual DOM) leaves stale spans behind, and
+                React's text reconciliation fails to update what it
+                thinks is a text node — net effect: the heading +
+                description text freezes on the previous step's
+                content. Remount = fresh DOM = SplitText re-runs on
+                the new text cleanly. */}
             <h2
+              key={`heading-${safeStep}`}
               ref={headingRef}
               className="mt-3 text-2xl font-bold tracking-tight md:text-3xl"
             >
@@ -230,6 +240,7 @@ export function InputWizard({
             </h2>
             {current.description && (
               <p
+                key={`desc-${safeStep}`}
                 ref={descRef}
                 className="mt-2 max-w-2xl text-base text-stone-600"
               >
