@@ -114,17 +114,24 @@ unit, long-term residential rental). Flag if there's a meaningful split.
 
 ## 3. Module structure
 
-Mirrors `scenarios/fthb/` and `scenarios/__init__.py` (the homeowner engine).
+Top-level `portfolio/` package — not nested under `scenarios/`. The
+portfolio engine is substantial enough (strategy registry, goal-weighted
+scoring matrix, per-property analytics, target-property capital model)
+to warrant its own peer package alongside `scenarios/`. The
+`scenarios/fthb/` precedent of nesting was for a much smaller engine
+that fit naturally beside the homeowner one.
 
 ```
-scenarios/portfolio_engine/
+portfolio/
 ├── __init__.py
 ├── types.py                      # Pydantic v2 models — all inputs + outputs
 ├── enums.py                      # PropertyType, CreditScoreBucket, Goal, etc.
 ├── constants.py                  # PRODUCT_RULES, WEIGHTING_PROFILES, credit/risk maps
-├── portfolio.py                  # sheet 3 — per-property + portfolio totals
-├── target.py                     # sheet 4 — capital-needed, DP-by-type
-├── scoring.py                    # weights × dims → weighted score, rank, recommendation classification
+├── portfolio_analytics.py        # sheet 3 — per-property + portfolio totals
+├── target_property.py            # sheet 4 — capital-needed, DP-by-type
+├── strategy_scoring.py           # weights × dims → weighted score, rank, recommendation classification
+├── goal_profiles.py              # the 4 weighting profiles keyed by InvestorGoal
+├── product_rules.py              # PRODUCT_RULES constants block
 ├── engine.py                     # top-level run() composing the pieces
 ├── strategies/
 │   ├── __init__.py               # STRATEGY_REGISTRY: list[Strategy]
@@ -159,7 +166,7 @@ files. Also makes the per-strategy goldens easier to read.
 ```python
 # strategies/base.py
 from typing import Protocol
-from portfolio_engine.types import (
+from portfolio.types import (
     PortfolioAnalytics, PortfolioEngineInputs, TargetProperty,
     ScoreDimensions,
 )

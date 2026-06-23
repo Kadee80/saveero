@@ -1,342 +1,175 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Product Overview
-
-**Saveero** is a home decision platform that models five realistic housing scenarios (Stay, Refinance, Sell+Buy, Rent Out, Rent Out+Buy) for homeowners. The core engine calculates financial outcomes for each scenario based on 45 user inputs, generates a Decision Map with rankings and recommendations, and produces lead capture data for mortgage banks, realtors, and financial planners.
-
-The product is split into three phases:
-1. **Month 1 (Current)** — Scenario calculation engine (complete) ✓
-2. **Month 2** — Lead capture loop + professional notifications (in progress)
-3. **Month 3** — Multi-tenant white-label + billing + analytics (planned)
+Guidance for Claude when working in this repository. Read this first, then go deep into the per-area docs in `docs/`.
 
 ---
 
-## Architecture Overview
+## What this codebase is
 
-### Backend (FastAPI + Python)
+Saveero is a web platform that compares housing decisions using deterministic Python engines pinned to client-validated Excel models. The product has three audiences, served by three parallel engines that share UI chrome:
 
-The backend is a stateless REST API that exposes the scenario engine via HTTP. Three routers handle distinct workflows:
+- **Homeowners** → `scenarios/` engine, `/decision-map` page
+- **First-time buyers** → `scenarios/fthb/` engine, `/fthb-decision-map` page
+- **Real-estate investors** → `portfolio/` engine, `/portfolio-builder` page (feature-flagged off in prod pending the goal weighting matrix)
 
-```
-main.py (FastAPI entry point)
-├── /api/scenarios/*  (scenario_routes.py)  — Housing decision models
-├── /api/mortgage/*   (mortgage_routes.py)  — Mortgage analysis  
-└── /api/listings/*   (listing_wizard_routes.py)  — AI listing generation
-```
+All three engines are pure Python, stateless, deterministic. The backend wraps them in FastAPI; the frontend is a React + Vite SPA. Auth + storage is Supabase. See [`README.md`](./README.md) for the broader picture and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for system-level diagrams.
 
-### Scenario Engine (Pure Python Domain Logic)
+---
 
-The `scenarios/` module is the core—a stateless, deterministic calculator with no I/O:
+## Where things live
 
 ```
-scenarios/
-├── inputs.py          — MasterInputs dataclass (45 fields all inputs)
-├── stay.py            — Stay scenario calculation
-├── refinance.py       — Refinance scenario calculation
-├── sell_buy.py        — Sell + Buy scenario calculation
-├── rent.py            — Rent (investment view) calculation
-├── rent_out_buy.py    — Rent Out & Buy scenario calculation
-├── decision_map.py    — Cross-scenario comparison, rankings, feasibility checks
-├── audit.py           — Audit trail of all calculations (source tracking)
-├── engine.py          — Orchestrator: runs all 5 scenarios + audit in sequence
-├── schemas.py         — Pydantic models (HTTP request/response wire format)
-└── __init__.py        — Public API exports
-```
-
-**Key design pattern:** The scenarios module exports **domain types** (dataclasses like `StayResult`, `RefinanceResult`). The API layer imports these and converts to/from Pydantic **schemas** for HTTP. This decouples internal logic from HTTP concerns.
-
-### Data Flow
-
-```
-HTTP Request (JSON)
-    ↓
-MasterInputsRequest (Pydantic schema)
-    ↓
-.to_inputs() → MasterInputs (dataclass)
-    ↓
-run_all() / compute_* (pure Python)
-    ↓
-StayResult, RefinanceResult, ... (dataclasses)
-    ↓
-RunAllResponse.from_result() (convert to Pydantic)
-    ↓
-HTTP Response (JSON)
-```
-
-### Frontend (React + Vite)
-
-The React SPA in `webapp/` consumes the backend API:
-
-```
-webapp/src/
-├── pages/            — Route components (Dashboard, ListProperty, ScenarioComparison)
-├── api/              — HTTP clients (auth.ts, listingApi.ts, scenarioApi.ts, ratesApi.ts)
-├── components/ui/    — Reusable UI primitives (Button, Card, Input)
-└── lib/              — Utilities (mortgage.ts, utils.ts)
+api/                  FastAPI routers   one per concern (scenarios, fthb, portfolio,
+                                        mortgage, leads, listings)
+scenarios/            Homeowner engine  pure Python — pinned to Excel via golden tests
+scenarios/fthb/       FTHB engine       same pattern, separate package
+portfolio/            Portfolio engine  same pattern; open strategy registry
+core/                 Config, auth, DB clients (Supabase admin + anon)
+mortgage/             Mortgage calculator utilities (single-scenario math)
+listing_wizard/       AI listing generator (OpenRouter — vision + text)
+db/migrations/        SQL files, run in order in Supabase SQL editor
+tests/                pytest — engine + API + auth + listing
+webapp/src/           React + Vite SPA
+  pages/              Route-level (DecisionMap, FTHBDecisionMap, PortfolioBuilder,
+                      AdminCRM, OnboardingWizard, StartIntake, Landing, etc.)
+  api/                Frontend HTTP clients — one per backend router
+  components/         Shared UI (InputWizard, HelpTip, SignupPrompt, …)
+  components/ui/      shadcn primitives
+  copy/tooltips.ts    Centralized help-tip copy (referenced by slug from FieldDef.help)
+  analytics/mixpanel.ts  Typed wrapper around mixpanel-browser
+  hooks/useGsapFadeIn.ts GSAP fade/split-text helpers
+  App.tsx             Top-level routing + auth-conditional shells (AnonymousShell
+                      for logged-out, full sidebar shell for authed)
+docs/                 All long-form docs (see README.md "Documentation map")
+scripts/              One-off scripts (gen_illustrations.py for DALL-E images)
 ```
 
 ---
 
-## Development Commands
+## Key design patterns
+
+### Engines are pure functions; routers convert to HTTP
+
+Each scenario module exports compute functions taking dataclass inputs and returning dataclass results. The `engine.py` orchestrates them. Routers in `api/` import the engine + Pydantic schemas (defined alongside in `schemas.py`) and convert between the two. The pattern, verbatim, is:
+
+```python
+@router.post("/scenarios/run")
+def run_full_engine(body: MasterInputsRequest) -> RunAllResponse:
+    result = run_all(body.to_inputs())           # Pydantic → dataclass → engine → dataclass
+    return RunAllResponse.from_result(result)    # dataclass → Pydantic → HTTP
+```
+
+This decoupling matters. The engine has no HTTP concerns; it's testable as pure Python. The schemas can evolve independently of the math. Maintain this separation when adding new endpoints.
+
+### Engines are golden-tested against Excel
+
+Every cell-level output the engine produces has a golden test asserting it matches the corresponding Excel model. When changing engine math, run the relevant golden suite (`pytest tests/test_scenarios_golden.py -v` for homeowner, `pytest tests/test_fthb_golden.py -v` for FTHB) and re-pin if the new value is correct. Don't change a golden without understanding why.
+
+### The frontend wizard chrome is shared
+
+`InputWizard` + `InputCollector` in `webapp/src/components/InputWizard.tsx` is the shared step-wizard component used by all three Decision Map pages. Adding a new wizard step elsewhere should reuse it — same `WizardStep` shape, same field kinds (`money`, `percent`, `months_as_years`, etc.), same illustration slot. Don't fork it.
+
+### Anonymous users are first-class
+
+Every calculator page runs end-to-end without auth. `AnonymousShell` wraps the unauthed routes with a slim sidebar; engines accept anonymous requests; save/contact-a-pro buttons degrade to `SignupPrompt`. The `useSession()` hook returns `Session | null | undefined` — `undefined` means "still loading", which matters because routing decisions made on `null` before the session resolves will mis-route. See `webapp/src/api/auth.ts` and `webapp/src/api/anonStash.ts` (intake answers + last-run survive signup and replay into the lead row).
+
+### Mixpanel is no-op without a token
+
+`webapp/src/analytics/mixpanel.ts` initializes only if `VITE_MIXPANEL_TOKEN` is set; without it, every `analytics.track()` and `analytics.identify()` call is a silent no-op. Safe to add tracking calls anywhere — they cost nothing if the token is absent. Event catalog (when it lands) at [`docs/MIXPANEL_EVENTS.md`](./docs/MIXPANEL_EVENTS.md).
+
+---
+
+## Commands
 
 ### Backend
 
 ```bash
-# Install dependencies
 pip install -r requirements.txt
+python3 -m uvicorn main:app --reload                      # http://localhost:8000
+                                                          # /docs for Swagger UI
 
-# Run the API server locally with auto-reload
-python3 -m uvicorn main:app --reload
-
-# Or use the CLI entry point (equivalent)
-python3 main.py --reload --port 8000
-
-# Run all tests
-pytest
-
-# Run a specific test
-pytest tests/test_scenarios_golden.py
-
-# Run tests in a module
-pytest tests/test_scenarios_golden.py::TestStayScenario
-
-# Run tests matching a keyword
-pytest -k "stay" -v
-
-# Run with coverage
-pytest --cov=scenarios tests/
-
-# Access interactive API docs
-# Open http://localhost:8000/docs
+pytest                                                    # full suite
+pytest tests/test_scenarios_golden.py -v                  # homeowner engine
+pytest tests/test_fthb_golden.py -v                       # FTHB engine
+pytest tests/test_portfolio_*.py -v                       # portfolio engine
+pytest -k "stay" -v                                       # keyword filter
+pytest --cov=scenarios tests/                             # coverage
 ```
 
 ### Frontend
 
 ```bash
 cd webapp
-
-# Install dependencies
 npm install
+npm run dev                                               # http://localhost:5173
 
-# Run dev server (auto-reload, opens at http://localhost:5173)
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build locally
-npm run preview
-
-# Run tests
-npm test
-
-# Run tests in UI mode
-npm test:ui
-
-# Generate coverage report
-npm run test:coverage
+npm run build                                             # production bundle
+npm run preview                                           # serve the prod bundle
+npm test                                                  # vitest
+npm run test:coverage                                     # coverage
 ```
+
+The Vite dev server proxies `/api/*` → `localhost:8000`, so backend + frontend run together against your local backend + real Supabase.
 
 ### Database
 
-Migrations are SQL files in `db/migrations/`. Run them manually in Supabase:
-1. Supabase dashboard → SQL Editor → "New Query"
-2. Paste contents of migration file
-3. Execute
+Migrations are SQL files in `db/migrations/`, numbered, run in order. Manual run-after-merge convention today: paste contents into the Supabase SQL Editor and execute. Detailed workflow + the `spatial_ref_sys` gotcha at [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md).
 
 ---
 
-## Key Files and Responsibilities
+## Common workflows
 
-### Inputs & Validation
+### Adding a new field to an engine
 
-**`scenarios/inputs.py`** — `MasterInputs` dataclass holding all 45 inputs. Client provides these values via the HTTP API. Key methods:
-- `validate()` — Raises `ValueError` if inputs are invalid
-- Ranges and constraints are documented inline
+1. Add to the dataclass in `scenarios/inputs.py` (or `scenarios/fthb/inputs.py`, etc.)
+2. Add to the Pydantic request schema in `schemas.py`
+3. Update the compute function(s) that use it
+4. Update the golden test fixture inputs + re-run the golden suite
+5. If user-facing: add to the relevant `STEPS` array in `webapp/src/pages/DecisionMap.tsx` or `FTHBDecisionMap.tsx`; add tooltip copy to `webapp/src/copy/tooltips.ts`
 
-**`api/scenario_routes.py`** — Accepts `MasterInputsRequest` (Pydantic), converts to `MasterInputs`, validates, calls compute functions.
+### Adding a new API endpoint
 
-### Scenario Calculations
+1. Pick (or add) the router in `api/`
+2. Define request/response Pydantic models in the relevant `schemas.py`
+3. Wire up the endpoint: convert request → dataclass → engine → dataclass → response
+4. Add a test in `tests/`
+5. Mount the router in `main.py` if it's a new file
+6. Add a thin TS client in `webapp/src/api/` if the frontend will call it
 
-Each scenario module exports a `compute_*()` function that takes `MasterInputs` and returns a result dataclass:
+### Adding a new wizard step
 
-- **`stay.py`** → `compute_stay()` → `StayResult`
-- **`refinance.py`** → `compute_refinance()` → `RefinanceResult`
-- **`sell_buy.py`** → `compute_sell_buy()` → `SellBuyResult` (needs Stay for monthly-cost reference)
-- **`rent.py`** → `compute_rent()` → `RentResult`
-- **`rent_out_buy.py`** → `compute_rent_out_buy()` → `RentOutBuyResult` (needs Stay)
+1. Add a `WizardStep` entry to the page's `STEPS` array
+2. Set `title`, `icon`, optional `description` (warm, conversational copy), `illustrationName`
+3. Generate the illustration: add a prompt to `scripts/gen_illustrations.py` PROMPTS dict, delete any existing file at that name, run `python scripts/gen_illustrations.py`
+4. The shared `InputWizard` picks it up automatically
 
-Each result dataclass has:
-- `.from_result()` class method to convert to Pydantic schema for HTTP response
-- Calculated fields (equity, monthly costs, break-even, etc.)
+### Reading a saved scenario
 
-### Decision Map & Recommendations
-
-**`decision_map.py`** — Takes all 5 scenario results and produces:
-- **Recommendation** — Which scenario ranks #1 for the homeowner
-- **Rankings** — All 5 scenarios ranked by wealth outcome
-- **Feasibility flags** — Is this scenario actually doable? (e.g., "Rent Out & Buy" flags if insufficient liquidity)
-- **Comparison table** — Side-by-side monthly costs and net position for all scenarios
-
-Called by `POST /api/scenarios/decision-map`.
-
-### Audit Trail
-
-**`audit.py`** — Traces every calculation back to inputs for transparency. `run_all()` calls `run_audit()` at the end.
-
-**`engine.py`** — Orchestrates the full engine:
-```python
-result = run_all(inputs)
-# Returns EngineResult with:
-# - stay, refi, sell_buy, rent, rent_out_buy (all 5 scenarios)
-# - decision_map (recommendations)
-# - audit (source of truth)
-```
-
-### Schemas (HTTP Wire Format)
-
-**`scenarios/schemas.py`** — Pydantic models for HTTP:
-- `MasterInputsRequest` — What the client POSTs
-- `StayOut`, `RefinanceOut`, `SellBuyOut`, etc. — What the API returns
-- Each has `.from_result()` to convert domain types to HTTP schema
-
-Example:
-```python
-@router.post("/scenarios/run")
-def run_full_engine(body: MasterInputsRequest) -> RunAllResponse:
-    result = run_all(body.to_inputs())
-    return RunAllResponse.from_result(result)  # Domain → HTTP
-```
+Auth-gated endpoints under `/api/scenarios/saved/*` and `/api/fthb/analyses/*`. Recent panel on the Dashboard pulls from both. See `webapp/src/api/scenarioApi.ts` and `fthbApi.ts`.
 
 ---
 
-## API Endpoints
+## Things to avoid
 
-All endpoints accept `MasterInputsRequest` (the 45 homeowner inputs) and return scenario results.
-
-### Full Engine
-- `POST /api/scenarios/run` → `RunAllResponse` (all 5 scenarios + decision map + audit)
-
-### Individual Scenarios
-- `POST /api/scenarios/stay` → `StayOut`
-- `POST /api/scenarios/refinance` → `RefinanceOut`
-- `POST /api/scenarios/sell-buy` → `SellBuyOut`
-- `POST /api/scenarios/rent` → `RentOut`
-- `POST /api/scenarios/rent-out-buy` → `RentOutBuyOut`
-
-### Comparisons
-- `POST /api/scenarios/decision-map` → `DecisionMapOut` (recommendations + rankings only, no detail cards)
-
-### Other
-- `GET /api/health` — Server health check
-- `POST /api/listings/generate` — AI listing from photos
-- `GET /api/mortgage/rates` — Live federal reserve rates
+- **Don't put math in the API layer.** Routers should be pass-throughs. Math lives in the engine package, period.
+- **Don't make LLM-generated numbers appear in results.** Engine output is the source of truth for any dollar figure. AI's role is interpretation, not calculation.
+- **Don't fork `InputWizard` per page.** Add a new `FieldKind` if a new input type is needed, but keep the shared component.
+- **Don't add a redirect guard on `/decision-map` or `/fthb-decision-map`.** Direct URLs are intentionally shareable; people send them to friends. See `feedback_shareable_calculator_urls.md` in agent memory.
+- **Don't surface auth-only nav items as hidden.** The anonymous sidebar shows everything with a Lock icon on locked items — every click is a conversion event. See `feedback_locked_features_visible.md` in agent memory.
+- **Don't change golden test expected values to make a failing test pass.** If the engine output is correct, re-pin; if it's wrong, fix the engine.
 
 ---
 
-## Testing
+## Pointers
 
-**Backend tests** live in `tests/` and use `pytest`:
-
-- **`test_scenarios_golden.py`** — Golden-path tests for all 5 scenarios. Each test provides inputs, calls the engine, and asserts expected outputs. **Start here when modifying scenario logic.**
-- **`test_scenarios_core.py`** — Core utility tests (amortization, tax shields, etc.)
-- **`test_auth.py`** — JWT authentication and Supabase integration
-- **`test_mortgage_*.py`** — Mortgage calculator tests
-- **`test_listing_routes.py`** — AI listing generation tests
-
-**Conftest.py** provides shared fixtures:
-- `mock_supabase_client` — Mocked Supabase (no DB calls)
-- `test_inputs()` — Standard test input set matching the product briefs
-- Other mocks for OpenRouter, FRED API, etc.
-
-**Frontend tests** in `webapp/` use `vitest` (Vite's test runner).
-
----
-
-## Configuration & Secrets
-
-### Backend (`.env`)
-
-```bash
-# Supabase credentials (required for prod; mocked in tests)
-SUPABASE_URL=https://...supabase.co
-SUPABASE_SERVICE_ROLE_KEY=...
-SUPABASE_JWT_AUDIENCE=authenticated
-SUPABASE_JWT_JWK={...json...}
-
-# AI/LLM (required for listing generation)
-OPENROUTER_API_KEY=...
-
-# Optional
-BRIDGE_SERVER_KEY=...     # RESO MLS API key
-
-# Frontend distribution directory (for static hosting)
-FRONTEND_DIST_DIR=./webapp/dist
-```
-
-### Frontend (`webapp/.env`)
-
-```bash
-# Supabase (required)
-VITE_SUPABASE_URL=https://...supabase.co
-VITE_SUPABASE_ANON_KEY=...
-
-# Backend API URL (blank for local dev)
-VITE_API_URL=http://localhost:8000
-
-# Mortgage rates API (required)
-VITE_FRED_API_KEY=...
-```
-
-See `.env.example` files for templates.
-
----
-
-## Common Development Workflows
-
-### Adding a New Input Field
-
-1. Add field to `MasterInputs` dataclass in `scenarios/inputs.py`
-2. Add Pydantic field to `MasterInputsRequest` in `scenarios/schemas.py`
-3. Update all scenario calculations if this input affects logic
-4. Add to golden-path test inputs in `test_scenarios_golden.py`
-5. Rebuild frontend form in `webapp/src/pages/ScenarioComparison.tsx`
-
-### Modifying Scenario Calculation Logic
-
-1. Edit the scenario module (e.g., `sell_buy.py`)
-2. Update the result dataclass if needed
-3. Add corresponding Pydantic schema change in `schemas.py`
-4. **Run golden-path tests**: `pytest tests/test_scenarios_golden.py -v`
-5. Update expected values in tests as needed
-6. The audit module auto-documents what changed
-
-### Running a Single Scenario Test
-
-```bash
-pytest tests/test_scenarios_golden.py::TestSellBuyScenario::test_sell_buy_basic -v
-```
-
-### Running Full API Workflow Test
-
-The `test_listing_routes.py` and `test_auth.py` examples show how to hit the API endpoints end-to-end with mocked Supabase. Use as templates for new integrations.
-
----
-
-## Deployment
-
-See `DEPLOYING.md` for detailed instructions on deploying to:
-- Backend → Render.com (Python/FastAPI)
-- Frontend → Vercel (React/Vite)
-- Database → Supabase (PostgreSQL + Auth)
-
----
-
-## Useful References
-
-- **FastAPI docs**: http://localhost:8000/docs (Swagger UI) — auto-generated from code
-- **Product spec**: See `/VAN/Saveero_Master_Brief.docx` for full scenario definitions and formulas
-- **Database schema**: `db/migrations/001_initial_schema.sql`
-- **Test fixtures**: `tests/conftest.py` — mock data, clients, test inputs
+- **Product surface map (user-flow oriented):** [`docs/USER_FLOWS.md`](./docs/USER_FLOWS.md)
+- **Backend internals + conventions:** [`docs/BACKEND.md`](./docs/BACKEND.md)
+- **Frontend internals + conventions:** [`docs/FRONTEND.md`](./docs/FRONTEND.md)
+- **Scenario engine math + Excel mapping:** [`docs/SCENARIOS.md`](./docs/SCENARIOS.md)
+- **Portfolio engine V1 spec:** [`docs/PORTFOLIO_ENGINE_ARCH.md`](./docs/PORTFOLIO_ENGINE_ARCH.md)
+- **Deploying:** [`docs/DEPLOYING.md`](./docs/DEPLOYING.md) and [`docs/STAGING_SETUP.md`](./docs/STAGING_SETUP.md)
+- **What's stale / how to onboard:** [`docs/ONBOARDING.md`](./docs/ONBOARDING.md) *(in progress)*
+- **Env vars (single source of truth):** [`docs/ENV_VARS.md`](./docs/ENV_VARS.md) *(in progress)*
+- **Conventions for the team:** [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- **Infra costs + roadmap:** [`docs/INFRA_ROADMAP.md`](./docs/INFRA_ROADMAP.md)
+- **Product brief (canonical scenario definitions):** `~/Desktop/VAN/Saveero_Master_Brief.docx`

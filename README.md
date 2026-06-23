@@ -1,256 +1,168 @@
 # Saveero
 
-A web platform that models a household's housing decisions, ranks them by
-expected wealth outcome, and routes engaged leads to partner professionals.
-Every number is derived from inputs the user provides — no black boxes, no
-generic advice. **Two parallel scenario engines** serve the two main audiences:
+A web platform that helps homeowners and prospective homebuyers compare
+their realistic housing options — stay, refinance, sell, rent, buy a
+first home, or build a real-estate portfolio — using deterministic
+scenario engines pinned cell-for-cell to client-validated Excel models.
 
-**Homeowner engine** (`/decision-map`) — for users who already own:
+Every number is derived from inputs the user provides. No black boxes,
+no generic advice. AI is the interpretive layer on top (in design,
+see [`docs/AI_COACH.md`](./docs/AI_COACH.md) when it lands), not a
+replacement for the engine math.
+
+---
+
+## Engines
+
+Three parallel scenario engines, forked at signup based on the user's
+self-reported role:
+
+**Homeowner** — `/decision-map`
 1. **Stay** — keep the home and current mortgage (baseline)
 2. **Refinance** — keep the home, replace the loan at a lower rate
 3. **Sell + Buy** — sell current home and purchase a replacement
 4. **Rent Out** — convert current home to a rental
-5. **Rent Out & Buy** — retain current as rental + simultaneously purchase new primary
+5. **Rent Out & Buy** — retain current as rental + purchase new primary
 
-**First-time-homebuyer engine** (`/fthb-decision-map`) — for users buying their first home:
-1. **Continue Renting** — invest the cash, accumulate savings
-2. **Buy Starter Home** — entry-priced purchase at the universal down payment
-3. **Buy Preferred Home** — higher-priced "reach" purchase
-4. **Buy with Downpayment Assistance** — starter + DPA (50bps rate premium + forced repayment at horizon)
-5. **Delay Purchase** — wait one year, save more, reassess
+**First-time homebuyer** — `/fthb-decision-map`
+1. **Continue renting** — invest the cash, accumulate savings
+2. **Buy starter home** — entry-priced purchase
+3. **Buy preferred home** — higher-priced "reach" purchase
+4. **Buy with downpayment assistance** — starter + DPA (50bps rate premium, forced repayment at horizon)
+5. **Delay purchase** — wait one year, save more, reassess
 
-Both engines are bit-for-bit golden-tested against the client's Excel models.
+**Real estate portfolio** — `/portfolio-builder` *(feature-flagged off in prod pending Van's weighting matrix)*
+- 8 starting strategies (Use Available Cash, HELOC, Conventional Cash-Out, DSCR Cash-Out, No-Ratio, Sell & Redeploy, Combination, Bridge/Hard Money) scored across 8 dimensions and weighted by the user's stated goal (Build Wealth / Generate Passive Income / Preserve Liquidity / Minimize Risk). Designed as an open registry — adding a 9th strategy is one new file + one registry entry.
 
-## Features
+All three engines are golden-tested against the underlying Excel models.
 
-- **Dual scenario engines** — Homeowner (5 scenarios) and FTHB (5 scenarios), forked at signup
-- **Decision Map** — Side-by-side comparison + recommendation with feasibility checks
-- **Step-wizard input collection** — One decision per screen for consumers, with a one-click toggle to a dense all-fields form for power users (industry pros default to all-fields)
-- **Mortgage Calculator** — Live single-scenario calculator with live Fed rates
-- **Compare Scenarios** — Stack up to three financing scenarios (down payment / rate / term variants)
-- **AI listing wizard** — Photo-to-listing with vision + LLM pipeline; staged progress UI for the ~1-2 min run
-- **Save & resume** — Save named analyses; deep-link back from the Dashboard's Recent panel
-- **Admin CRM** (`/admin/crm`) — Kanban or table view of leads; faceted filtering; CSV export; bulk delete; in-drawer edit
-- **Engaged-lead webhook** — Outbound notification (Zapier Catch Hook → any channel) when a lead clicks Contact-a-partner
+---
 
-## Tech Stack
+## Surfaces
+
+| Page | Path | Notes |
+|---|---|---|
+| Landing | `/` | Anonymous marketing page. Six scenario cards, sticky top nav, every CTA routes to `/start`. |
+| Intake wizard | `/start` | Anonymous-friendly version of `OnboardingWizard` — stashes answers to localStorage, routes the user to the matching engine on completion, replays into the lead row on signup. |
+| Homeowner Decision Map | `/decision-map` | Anonymous-friendly. Step wizard (default) or "All fields" form (default for industry pros), toggle persists. |
+| FTHB Decision Map | `/fthb-decision-map` | Anonymous-friendly. Same shared `InputWizard` chrome. |
+| Portfolio Builder | `/portfolio-builder` | Feature-flagged (`VITE_PORTFOLIO_ENABLED`). |
+| Mortgage Calculator | `/mortgage-calculator` | Live single-scenario calculator with live FRED rates. |
+| Compare Scenarios | `/scenarios` | Stack up to three financing scenarios. |
+| List Property | `/list-property` | AI listing wizard — photo + vision + LLM pipeline. |
+| Dashboard | `/` (authed) | Persona-aware hub. Forks the hero tool by `lead.role`. |
+| Admin CRM | `/admin/crm` | Kanban + table views, faceted filtering, CSV export, in-drawer edit. Engaged-lead webhook → Zapier. |
+
+---
+
+## Tech stack
 
 | Layer | Technology |
-|-------|-----------|
-| Frontend | React 18 + Vite 5 + TypeScript + Tailwind CSS |
-| Backend | FastAPI + Python 3.11 |
-| Core Engine | Pure Python (stateless scenario calculations) |
+|---|---|
+| Frontend | React 18 · Vite 5 · TypeScript · Tailwind · shadcn/ui · GSAP (animations) |
+| Backend | FastAPI · Python 3.11 |
+| Engines | Pure Python (stateless, deterministic, golden-tested) |
 | Database + Auth | Supabase (PostgreSQL + JWT) |
-| AI | OpenRouter (vision + text models) |
+| AI / LLM | OpenRouter (vision + text) — listings today; Home Decision Coach in design |
+| Product analytics | Mixpanel (client-side; no-op without `VITE_MIXPANEL_TOKEN`) |
 | Frontend hosting | Vercel |
 | Backend hosting | Render |
 
-## Architecture Overview
+---
 
-The platform is built in three layers:
+## Documentation map
 
-**1. Scenario engines** — two parallel packages
-- `scenarios/` — homeowner engine (5 scenarios, ~45 inputs)
-- `scenarios/fthb/` — first-time-homebuyer engine (5 scenarios, ~25 inputs)
-- Pure Python, stateless, deterministic; both bit-for-bit golden-tested against the client's Excel models
-- See [SCENARIOS.md](./SCENARIOS.md) for detailed calculation logic (Part 1 = homeowner, Part 2 = FTHB)
+Three docs at the root, everything else in [`docs/`](./docs/):
 
-**2. Backend API** (FastAPI)
-- REST endpoints for both scenario engines (`/api/scenarios/*` and `/api/fthb/scenarios/*`), mortgage analysis, AI listings, CRM lead management
-- Supabase integration for authentication and persistence (leads, mortgage analyses, FTHB analyses)
-- Outbound webhook for engaged-lead notifications (dormant unless `ENGAGED_LEAD_WEBHOOK_URL` is set)
+| Audience | Start here |
+|---|---|
+| **New devs (joining the team)** | [`docs/ONBOARDING.md`](./docs/ONBOARDING.md) → [`CONTRIBUTING.md`](./CONTRIBUTING.md) → [`docs/INFRA_ROADMAP.md`](./docs/INFRA_ROADMAP.md) |
+| **Devops / infra work** | [`docs/DEPLOYING.md`](./docs/DEPLOYING.md), [`docs/STAGING_SETUP.md`](./docs/STAGING_SETUP.md), [`docs/BRANCH_PROTECTION.md`](./docs/BRANCH_PROTECTION.md), [`docs/INFRA_ROADMAP.md`](./docs/INFRA_ROADMAP.md), [`docs/ENV_VARS.md`](./docs/ENV_VARS.md), [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md) |
+| **Backend / engine work** | [`docs/BACKEND.md`](./docs/BACKEND.md), [`docs/SCENARIOS.md`](./docs/SCENARIOS.md), [`docs/PORTFOLIO_ENGINE_ARCH.md`](./docs/PORTFOLIO_ENGINE_ARCH.md) |
+| **Frontend work** | [`docs/FRONTEND.md`](./docs/FRONTEND.md), [`docs/USER_FLOWS.md`](./docs/USER_FLOWS.md) |
+| **Test work** | [`docs/TESTING.md`](./docs/TESTING.md) |
+| **Analytics** | [`docs/MIXPANEL_EVENTS.md`](./docs/MIXPANEL_EVENTS.md) |
+| **High-altitude overview** | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) |
+| **Working with Claude in this repo** | [`CLAUDE.md`](./CLAUDE.md) |
 
-**3. Frontend** (React + Vite)
-- SPA with persona-aware routing — Dashboard hero forks by `lead.role`
-- Shared `<InputCollector>` component for both Decision Map pages: step-wizard view (default for consumers) or dense all-fields view (default for industry pros), choice persisted in localStorage
-- Admin CRM with Kanban / table views, faceted filtering, CSV export
+---
 
-**For end-user / user-guide writers:** Start with **[USER_FLOWS.md](./USER_FLOWS.md)** — page-by-page surface map written from the user's perspective.
+## Quick start
 
-**For developers:** Start with **[CLAUDE.md](./CLAUDE.md)** for commands and architecture overview. Then see:
-- **[USER_FLOWS.md](./USER_FLOWS.md)** — Product surface map (user flows, page behaviors)
-- **[SCENARIOS.md](./SCENARIOS.md)** — Complete scenario engine documentation for both engines
-- **[BACKEND.md](./BACKEND.md)** — FastAPI architecture and API endpoints
-- **[FRONTEND.md](./FRONTEND.md)** — React SPA structure and components
+**Prerequisites:** Python 3.11, Node 18+, a Supabase project, an OpenRouter API key.
 
-### Quick Start
-
-**Backend:**
 ```bash
+# Backend
+git clone https://github.com/Kadee80/saveero.git && cd saveero
 pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with Supabase and OpenRouter keys
-python3 -m uvicorn main:app --reload
-# API available at http://localhost:8000/docs
-```
+cp .env.example .env       # fill in SUPABASE_* + OPENROUTER_API_KEY
+python3 -m uvicorn main:app --reload          # http://localhost:8000
 
-**Frontend:**
-```bash
+# Frontend (in a second terminal)
 cd webapp
 npm install
-cp .env.example .env
-# Edit .env with Supabase and FRED API keys
-npm run dev
-# App available at http://localhost:5173
+cp .env.example .env       # fill in VITE_SUPABASE_*
+npm run dev                # http://localhost:5173
+
+# Tests
+pytest                                           # backend
+cd webapp && npm test                            # frontend
 ```
 
-**Tests:**
-```bash
-pytest                                    # Run all tests
-pytest tests/test_scenarios_golden.py -v # Run scenario engine tests
-cd webapp && npm test                     # Run frontend tests
-```
+The frontend dev server proxies `/api/*` to `localhost:8000`, so both run together against your local backend + real Supabase.
 
-### Project Structure
+**Database setup:** run the SQL files in [`db/migrations/`](./db/migrations/) in order in your Supabase SQL editor. See [`docs/MIGRATIONS.md`](./docs/MIGRATIONS.md) for the full workflow + gotchas.
+
+For a fuller setup walkthrough, see [`docs/ONBOARDING.md`](./docs/ONBOARDING.md).
+
+---
+
+## Project structure
 
 ```
 saveero/
-├── scenarios/              # Core scenario engine (pure Python, stateless)
-│   ├── inputs.py          # Input validation
-│   ├── stay.py, refinance.py, sell_buy.py, rent.py, rent_out_buy.py
-│   ├── decision_map.py     # Rankings and recommendations
-│   ├── engine.py           # Orchestrator
-│   ├── audit.py            # Calculation trail
-│   ├── schemas.py          # Pydantic HTTP models
-│   └── core.py             # Shared utilities (amortization, tax, etc.)
-├── api/
-│   ├── scenario_routes.py  # POST /api/scenarios/* endpoints
-│   ├── mortgage_routes.py  # Mortgage calculator endpoints
-│   └── listing_wizard_routes.py  # AI listing endpoints
-├── core/                   # Config, auth, database clients
-├── mortgage/               # Mortgage analysis utilities
-├── db/                     # Schema migrations
-├── tests/                  # pytest test suite
-├── webapp/                 # React frontend (Vite)
-├── main.py                 # FastAPI entry point
-├── CLAUDE.md               # Developer guide
-├── SCENARIOS.md            # Scenario engine documentation
-├── BACKEND.md              # Backend architecture
-└── FRONTEND.md             # Frontend architecture
-```
-
----
-
-## Local Development
-
-### Prerequisites
-- Python 3.11 (via pyenv recommended)
-- Node.js 18+
-- A Supabase project
-- An OpenRouter API key
-
-### 1. Clone the repo
-```bash
-git clone https://github.com/Kadee80/saveero.git
-cd saveero
-```
-
-### 2. Backend setup
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Copy and fill in the backend env file
-cp .env.example .env
-```
-
-Edit `.env` with your Supabase and OpenRouter keys:
-- **SUPABASE_URL** — From Supabase dashboard Settings → API
-- **SUPABASE_SERVICE_ROLE_KEY** — From Supabase dashboard Settings → API
-- **SUPABASE_JWT_JWK** — Fetch from `https://<your-project>.supabase.co/auth/v1/.well-known/jwks.json`
-- **OPENROUTER_API_KEY** — From openrouter.ai
-
-Run the database schema migration:
-1. Log into your Supabase dashboard
-2. Go to SQL Editor → "New Query"
-3. Copy the contents of `db/migrations/001_initial_schema.sql`
-4. Paste and execute
-
-Start the backend:
-```bash
-python3 -m uvicorn main:app --reload
-```
-
-Backend API available at `http://localhost:8000`
-- Access docs at `http://localhost:8000/docs` (Swagger UI)
-- Health check: `curl http://localhost:8000/api/health`
-
-### 3. Frontend setup
-```bash
-cd webapp
-npm install
-```
-
-Copy and fill in the frontend env file:
-```bash
-cp .env.example .env
-```
-
-Start the dev server:
-```bash
-npm run dev
-```
-App available at `http://localhost:5173`
-
----
-
-## Environment Variables
-
-### Backend (`saveero/.env`)
-
-| Variable | Description |
-|----------|-------------|
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role JWT (Settings → API) |
-| `SUPABASE_JWT_AUDIENCE` | Set to `authenticated` |
-| `SUPABASE_JWT_JWK` | Public key JSON from `<supabase-url>/auth/v1/.well-known/jwks.json` |
-| `OPENROUTER_API_KEY` | OpenRouter API key |
-| `BRIDGE_SERVER_KEY` | Optional — Bridge RESO MLS API key |
-| `ENGAGED_LEAD_WEBHOOK_URL` | Optional — Zapier Catch Hook (or any webhook URL) fired when a lead enters `engaged`. Unset = notifications silently skipped. |
-| `APP_BASE_URL` | Optional — public app URL used to build CRM deep-links in the notification payload |
-
-### Frontend (`webapp/.env`)
-
-| Variable | Description |
-|----------|-------------|
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon/public key |
-| `VITE_API_URL` | Backend URL (blank for local dev, Render URL for production) |
-| `VITE_FRED_API_KEY` | FRED API key for live mortgage rates (free at fred.stlouisfed.org) |
-
----
-
-## Deployment
-
-See [DEPLOYING.md](./DEPLOYING.md) for full step-by-step instructions covering Render (backend), Vercel (frontend), and Supabase setup.
-
----
-
-## Project Structure
-
-```
-saveero/
-├── main.py                  # FastAPI app entry point
+├── main.py                       # FastAPI entry point
 ├── requirements.txt
-├── api/
-│   └── listing_wizard_routes.py   # Listing generate/save/list endpoints
-├── core/
-│   ├── auth.py              # JWT authentication dependency
-│   ├── config.py            # Pydantic settings (reads from .env)
-│   └── database.py          # Supabase client singleton
-├── listing_wizard/
-│   ├── listing_generator.py # AI listing generation (OpenRouter + LangChain)
-│   ├── image_describer.py   # Vision model image analysis
-│   └── models.py            # Pydantic data models
-├── mortgage/                # Mortgage calculation logic
-├── db/
-│   └── migrations/          # SQL schema files
-├── webapp/                  # React frontend (Vite)
+├── api/                          # FastAPI routers (one per concern)
+│   ├── scenario_routes.py        # /api/scenarios/*    homeowner engine
+│   ├── fthb_routes.py            # /api/fthb/*         FTHB engine
+│   ├── portfolio_routes.py       # /api/portfolio/*    portfolio engine
+│   ├── mortgage_routes.py        # /api/mortgage/*     calculator
+│   ├── lead_routes.py            # /api/leads/*, /api/me/lead   CRM
+│   └── listing_wizard_routes.py  # /api/listings/*     AI listings
+├── scenarios/                    # Homeowner engine (pure Python)
+│   ├── inputs.py engine.py decision_map.py audit.py schemas.py core.py
+│   └── stay.py refinance.py sell_buy.py rent.py rent_out_buy.py
+├── scenarios/fthb/               # FTHB engine (pure Python)
+│   └── inputs.py engine.py decision_map.py …
+├── portfolio/                    # Portfolio Strategy engine (pure Python)
+│   ├── engine.py inputs.py schemas.py
+│   ├── portfolio_analytics.py target_property.py
+│   └── strategy_scoring.py goal_profiles.py product_rules.py
+├── core/                         # Config, auth, DB clients
+├── mortgage/                     # Mortgage calculator utilities
+├── listing_wizard/               # AI listing generator
+├── db/migrations/                # SQL schema files (run in order)
+├── tests/                        # pytest suite
+├── scripts/                      # one-off scripts (incl. gen_illustrations.py)
+├── webapp/                       # React + Vite frontend
 │   ├── src/
-│   │   ├── pages/           # Dashboard, ListProperty, MortgageCalculator, ScenarioComparison, Login
-│   │   ├── api/             # Frontend API clients (auth, listings, rates)
-│   │   └── components/      # Shared UI components
-│   └── vercel.json          # Vercel routing config
-├── DEPLOYING.md             # Deployment guide
-└── CONTRIBUTING.md          # Local setup and contribution guide
+│   │   ├── pages/                # Route-level components
+│   │   ├── api/                  # HTTP clients (one per backend router)
+│   │   ├── components/           # Shared UI (InputWizard, HelpTip, etc.)
+│   │   ├── components/ui/        # shadcn primitives
+│   │   ├── copy/tooltips.ts      # Centralised help-tip copy
+│   │   ├── analytics/mixpanel.ts # Typed Mixpanel wrapper
+│   │   ├── hooks/                # useGsapFadeIn etc.
+│   │   └── App.tsx               # Top-level routing + shells (authed + anon)
+│   └── vercel.json
+├── docs/                         # All long-form docs (see Documentation map above)
+├── CLAUDE.md                     # Guidance for Claude when editing this repo
+└── CONTRIBUTING.md               # How to work in this codebase
 ```
+
+---
+
+## License
+
+Proprietary. © Saveero.
