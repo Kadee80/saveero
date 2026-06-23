@@ -146,22 +146,35 @@ export function InputWizard({
   const Icon = current.icon
   const isLast = safeStep === steps.length - 1
 
-  // Step-entrance animations. Description splits into words and
-  // staggers in (instead of fading as a single block — Katie
-  // 2026-06-23: the block fade was reading as "by line" because the
-  // text wraps; per-word stagger gives it real motion at the prompt
-  // level). Illustration still fades as one piece on every step
-  // change. The heading is left alone — Katie 2026-06-10: animating
-  // the heading re-runs felt clunky and pulled focus from the
-  // description copy, which is what actually changes step-to-step in
-  // a way the user needs to absorb. Bails out cleanly under
-  // prefers-reduced-motion via the underlying hooks.
+  // Step-entrance animations. Heading + description both split into
+  // words and stagger in; illustration fades as a single block.
+  //
+  // History — Katie 2026-06-10 originally chose to leave the heading
+  // un-animated because the prior block-fade re-run felt clunky and
+  // pulled focus from the description. Katie 2026-06-23 reversed that
+  // when we adopted per-word SplitText: word-level stagger is much
+  // more legible than the block fade, so heading + description can
+  // both animate without competing for focus. Heading lands first
+  // (no delay, slightly looser stagger so each word reads), then the
+  // description follows.
+  //
+  // All three bail out cleanly under prefers-reduced-motion via the
+  // underlying hooks.
+  const headingRef = useRef<HTMLHeadingElement>(null)
   const descRef = useRef<HTMLParagraphElement>(null)
   const illustrationRef = useRef<HTMLDivElement>(null)
+  useSplitWordsIn(headingRef, {
+    y: 12,
+    duration: 0.55,
+    delay: 0,
+    stagger: 0.04,
+    trigger: 'mount',
+    triggerKey: safeStep,
+  })
   useSplitWordsIn(descRef, {
     y: 10,
     duration: 0.5,
-    delay: 0.1,
+    delay: 0.15,
     stagger: 0.025,
     trigger: 'mount',
     triggerKey: safeStep,
@@ -209,7 +222,10 @@ export function InputWizard({
             >
               <Icon className="h-5 w-5" style={{ color: accentColor }} />
             </div>
-            <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">
+            <h2
+              ref={headingRef}
+              className="mt-3 text-2xl font-bold tracking-tight md:text-3xl"
+            >
               {current.title}
             </h2>
             {current.description && (
