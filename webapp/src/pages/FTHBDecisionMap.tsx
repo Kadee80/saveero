@@ -130,6 +130,7 @@ const FTHB_STEPS: WizardStep[] = [
     title: 'Your financial profile',
     icon: Wallet,
     description: 'Income, debts, and the cash you have to work with.',
+    illustrationName: 'fthb_step_finances',
     fields: [
       { key: 'annual_household_income',     label: 'Annual household income', kind: 'money', hint: 'Gross — before tax.', help: 'fthb.input.annual_household_income' },
       { key: 'monthly_debt_obligations',    label: 'Monthly debt obligations', kind: 'money', hint: 'Student loans, auto, credit cards.', help: 'fthb.input.monthly_debt_obligations' },
@@ -142,6 +143,7 @@ const FTHB_STEPS: WizardStep[] = [
     title: 'Your home goals',
     icon: Home,
     description: 'What you pay in rent today and the price points you’re weighing.',
+    illustrationName: 'fthb_step_goals',
     fields: [
       { key: 'current_monthly_rent', label: 'Current monthly rent', kind: 'money', hint: 'What you pay today.', help: 'fthb.input.current_monthly_rent' },
       { key: 'starter_home_price',   label: 'Starter home target price', kind: 'money', hint: 'Lower entry-point option.', help: 'fthb.input.starter_home_price' },
@@ -153,6 +155,7 @@ const FTHB_STEPS: WizardStep[] = [
     title: 'Rates & term',
     icon: Percent,
     description: 'Pre-filled to the model defaults — tweak only what you want to override.',
+    illustrationName: 'fthb_step_rates',
     fields: [
       { key: 'mortgage_rate',        label: 'Mortgage interest rate', kind: 'percent', hint: 'Standard financing rate.', help: 'fthb.input.mortgage_rate' },
       { key: 'mortgage_term_months', label: 'Mortgage term', kind: 'months', hint: 'Amortization period.', help: 'fthb.input.mortgage_term_months' },
@@ -162,6 +165,7 @@ const FTHB_STEPS: WizardStep[] = [
     title: 'Costs & taxes',
     icon: Receipt,
     description: 'Closing, carrying, and upkeep assumptions.',
+    illustrationName: 'fthb_step_costs',
     fields: [
       { key: 'purchase_closing_cost_pct', label: 'Purchase closing cost', kind: 'percent', hint: '% of purchase price.', help: 'fthb.input.purchase_closing_cost_pct' },
       { key: 'property_tax_annual_pct',   label: 'Property tax (annual)', kind: 'percent', hint: '% of home value per year.', help: 'fthb.input.property_tax_annual_pct' },
@@ -174,6 +178,7 @@ const FTHB_STEPS: WizardStep[] = [
     title: 'Growth assumptions',
     icon: TrendingUp,
     description: 'How home value, rent, and cash grow over the horizon.',
+    illustrationName: 'fthb_step_growth',
     fields: [
       { key: 'annual_home_appreciation', label: 'Annual home appreciation', kind: 'percent', hint: 'Home value growth rate.', help: 'fthb.input.annual_home_appreciation' },
       { key: 'annual_rent_inflation',    label: 'Annual rent inflation', kind: 'percent', hint: 'Rent growth rate.', help: 'fthb.input.annual_rent_inflation' },
@@ -185,6 +190,7 @@ const FTHB_STEPS: WizardStep[] = [
     title: 'Feasibility & assistance',
     icon: Compass,
     description: 'Lender limits, liquidity cushions, and downpayment assistance.',
+    illustrationName: 'fthb_step_feasibility',
     fields: [
       { key: 'max_dti',                label: 'Max DTI allowed', kind: 'percent', hint: 'Lender debt-to-income ceiling.', help: 'fthb.input.max_dti' },
       { key: 'post_close_cushion_pct', label: 'Post-close cushion', kind: 'percent', hint: '% of cash kept as a liquidity warning threshold.', help: 'fthb.input.post_close_cushion_pct' },

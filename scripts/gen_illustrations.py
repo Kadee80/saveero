@@ -184,6 +184,126 @@ PROMPTS: dict[str, str] = {
         "teal (#5a9a8e) and dusty sky blue. Generous visible canvas "
         "grain and painterly texture throughout. " + STYLE
     ),
+    # --- Added 2026-06-10: per-step illustrations for the calculator
+    # wizards. Each step on DecisionMap / FTHBDecisionMap gets its own
+    # ~180px square illustration alongside the heading, per Van's
+    # "feel like a real step wizard" feedback. All match the existing
+    # dusty cool-toned palette (sage / sky blue / teal-dominant) and
+    # follow the same flat 2D editorial style.
+    #
+    # Naming: dm_step_* for the homeowner Decision Map, fthb_step_*
+    # for First-Time-Homebuyer. The InputWizard renders these via
+    # WizardStep.illustrationName.
+
+    # --- DecisionMap (homeowner) steps ---
+
+    "dm_step_home": (
+        "A small modern cottage seen from a slight angle, sitting "
+        "calmly in a soft yard. Dusty sky-blue clapboard siding, "
+        "white window trim, a single warm glow in the window, a "
+        "gentle painted sun in the corner of the sky. A potted "
+        "plant beside the front step. No people. Soft, settled, "
+        "lived-in mood. Dusty sky blue dominant. " + STYLE
+    ),
+    "dm_step_market": (
+        "An abstract scene showing a small house on a soft sage hill "
+        "with a flowing upward line behind it suggesting appreciation, "
+        "a small percentage symbol gently floating in the sky, dusty "
+        "clouds in the background. No people. Calm, big-picture, "
+        "almanac-of-assumptions mood. Dusty sky blue and sage "
+        "dominant. " + STYLE
+    ),
+    "dm_step_refinance": (
+        "A simple desk scene with a refinance-paperwork stack and a "
+        "fountain pen resting on top, a small house icon on the top "
+        "page, a coffee mug to the side, soft window light in the "
+        "background. Same calm dusty palette. Fresh-start, "
+        "paperwork-renewal feeling without being clinical. Dusty "
+        "sky blue and sage dominant. " + STYLE
+    ),
+    "dm_step_purchase": (
+        "A pair of small houses side by side on a soft sage lawn — "
+        "a smaller current home on the left and a slightly larger "
+        "new home on the right, connected by a softly painted path. "
+        "Both in dusty sky-blue siding with white trim. A simple "
+        "stylized sold-sign post (no text, just a rectangle and "
+        "post) between them. No people. Move-into-the-next-chapter "
+        "mood. Dusty sky blue dominant. " + STYLE
+    ),
+    "dm_step_ongoing": (
+        "A small home seen from the front with a gentle floating "
+        "ring of subtle ongoing-cost icons around it — a tiny shield "
+        "shape, a tiny wrench shape, a tiny leaf — all rendered as "
+        "flat shapes in the same dusty palette as the house. No "
+        "people. Steady-state, monthly-running-costs feeling. Dusty "
+        "sky blue and sage dominant. " + STYLE
+    ),
+    "dm_step_rental": (
+        "A small home with a stylized For-Rent sign post in the front "
+        "yard (no text, just a rectangle and post in dusty sage), a "
+        "single small coin shape gently floating above the home "
+        "suggesting rental income, a potted plant beside the door. "
+        "No people. Calm, income-property mood — not flashy. Dusty "
+        "sky blue and sage dominant. " + STYLE
+    ),
+    "dm_step_liquidity": (
+        "An abstract scene with a small stack of three stylized coin "
+        "shapes on the ground beside a small home in the background, "
+        "a small clear water-glass shape next to the coins suggesting "
+        "liquidity, soft sage ground band, soft cloud shapes. No "
+        "people. Cash-reserve, cushion-on-hand mood. Dusty sky blue "
+        "and sage dominant. " + STYLE
+    ),
+
+    # --- FTHB (first-time buyer) steps ---
+
+    "fthb_step_finances": (
+        "An abstract scene with a small stylized wallet shape on a "
+        "soft surface, a few flat-color coin shapes spilling gently "
+        "from it, a small notepad shape beside it with simple "
+        "horizontal lines. No people. Soft cool palette — dusty "
+        "seafoam teal and sky blue dominant, one warm terracotta "
+        "accent on the coins. Calm, taking-stock mood. " + STYLE
+    ),
+    "fthb_step_goals": (
+        "Two stylized small homes side by side on a soft sage lawn — "
+        "a smaller starter cottage on the left and a slightly larger "
+        "preferred home on the right, both with dusty seafoam-teal "
+        "doors, soft cloud shapes in the upper sky. No people. "
+        "Comparing-options mood. Dusty seafoam teal and sky blue "
+        "dominant. " + STYLE
+    ),
+    "fthb_step_rates": (
+        "A simple scene with a small flat-color percent symbol "
+        "floating gently above a stylized home, a soft horizontal "
+        "line beneath suggesting a rate curve, calm sky-blue "
+        "background. No people. Quiet, technical-defaults mood. "
+        "Dusty seafoam teal and sky blue dominant. " + STYLE
+    ),
+    "fthb_step_costs": (
+        "An abstract scene with a small stylized house on the right "
+        "and a tidy stack of three flat-shape receipts to the left "
+        "with simple horizontal lines on each, a small coin shape "
+        "beside the stack. No people. Calm, closing-costs-and-"
+        "upkeep mood. Dusty seafoam teal and sage dominant, one "
+        "warm terracotta accent. " + STYLE
+    ),
+    "fthb_step_growth": (
+        "A small home on a soft sage hill with a gentle upward arc "
+        "behind it suggesting growth, a small leaf shape and a small "
+        "coin shape rising along the arc. Soft cloud shapes in the "
+        "sky. No people. Quiet, long-horizon mood. Dusty seafoam "
+        "teal and sky blue dominant. " + STYLE
+    ),
+    "fthb_step_feasibility": (
+        "An abstract scene with a small stylized compass shape in "
+        "the center, a soft horizontal line beneath suggesting "
+        "a horizon or limit, a tiny house icon to the right "
+        "and a tiny stack of coin shapes to the left, all in the "
+        "same flat dusty palette. No people. Calm, checking-the-"
+        "limits mood. Dusty seafoam teal and sky blue dominant. "
+        + STYLE
+    ),
 }
 
 

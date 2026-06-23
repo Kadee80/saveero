@@ -25,7 +25,7 @@
  *
  * @component
  */
-import { type ComponentType, useEffect, useState } from 'react'
+import { type ComponentType, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, LayoutGrid, ListChecks, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,6 +40,7 @@ import {
 import { cn } from '@/lib/utils'
 import { getMyLead } from '@/api/leadsApi'
 import { HelpTip } from '@/components/HelpTip'
+import { useFadeInOnMount } from '@/hooks/useGsapFadeIn'
 
 // ---------------------------------------------------------------------------
 // Public types — consumers build their `steps` from these.
@@ -87,6 +88,17 @@ export interface WizardStep {
   icon: IconComponent
   /** Optional sub-line under the step title. */
   description?: string
+  /**
+   * Optional per-step illustration. Renders inline at the top of the step
+   * (~180px square) alongside the heading + description. Path is the
+   * basename in /public/illustrations/ without extension — e.g.
+   * 'decisionmap_step_home' → /illustrations/decisionmap_step_home.png.
+   *
+   * Added 2026-06-10 per Van's "feel like a real step wizard" feedback —
+   * each step gets its own page treatment rather than the icon-chip-only
+   * header pattern.
+   */
+  illustrationName?: string
   fields: FieldDef[]
 }
 
@@ -134,12 +146,39 @@ export function InputWizard({
   const Icon = current.icon
   const isLast = safeStep === steps.length - 1
 
+  // Step-entrance animations. Description + illustration fade in on
+  // every step change so the eye lands on what's actually new. The
+  // heading is left alone — Katie 2026-06-10: animating the heading
+  // re-runs felt clunky and pulled focus from the description copy,
+  // which is what actually changes step-to-step in a way the user
+  // needs to absorb. Bails out cleanly under prefers-reduced-motion
+  // via the underlying hooks.
+  const descRef = useRef<HTMLParagraphElement>(null)
+  const illustrationRef = useRef<HTMLDivElement>(null)
+  useFadeInOnMount(descRef, {
+    y: 12,
+    duration: 0.5,
+    delay: 0.1,
+    triggerKey: safeStep,
+  })
+  useFadeInOnMount(illustrationRef, {
+    y: 12,
+    duration: 0.6,
+    delay: 0,
+    triggerKey: safeStep,
+  })
+
   return (
     <section
-      className="overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border"
+      // sticky top-0 pins the wizard at the top of the viewport when
+      // the user scrolls down past it. Kept simple: no max-h/flex
+      // gymnastics. Wizard renders at its natural height; if a
+      // particular viewport is shorter than the wizard, the user can
+      // still scroll within the page to see the bottom of the card.
+      className="sticky top-0 overflow-hidden rounded-xl bg-card shadow-md ring-1 ring-border"
       style={{ borderTopColor: accentColor, borderTopWidth: 4 }}
     >
-      <div className="p-6 md:p-8">
+      <div className="px-6 pt-6 md:px-8 md:pt-8">
         <ProgressStrip
           steps={steps}
           current={safeStep}
@@ -148,39 +187,69 @@ export function InputWizard({
 
         {/* Step heading — larger and more breathing room per Van's deck
             (2026-06-01: "Use larger typography hierarchy. Current
-            hierarchy is too flat."). The icon chip stays as the visual
-            anchor; title bumps from text-xl to text-2xl/3xl and the
-            description picks up a touch more weight + space. */}
-        <header className="mt-8">
-          <div
-            className="inline-flex rounded-md p-2"
-            style={{ backgroundColor: `${accentColor}1a` }}
-          >
-            <Icon className="h-5 w-5" style={{ color: accentColor }} />
+            hierarchy is too flat.").
+            Updated 2026-06-10: each step now optionally renders a small
+            inline illustration alongside the heading, per the "feel
+            like a real step wizard" feedback. When no illustrationName
+            is supplied, the layout falls back to the original
+            icon-chip-only header. */}
+        <header className="mt-8 flex flex-col-reverse gap-5 sm:flex-row sm:items-start sm:justify-between sm:gap-6 sm:min-h-[192px]">
+          {/* Heading column. min-h matches the illustration's md:w-48
+              so the header row stays a consistent height whether the
+              description is one line or three. */}
+          <div className="min-w-0 flex-1">
+            <div
+              className="inline-flex rounded-md p-2"
+              style={{ backgroundColor: `${accentColor}1a` }}
+            >
+              <Icon className="h-5 w-5" style={{ color: accentColor }} />
+            </div>
+            <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">
+              {current.title}
+            </h2>
+            {current.description && (
+              <p
+                ref={descRef}
+                className="mt-2 max-w-2xl text-base text-stone-600"
+              >
+                {current.description}
+              </p>
+            )}
           </div>
-          <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">
-            {current.title}
-          </h2>
-          {current.description && (
-            <p className="mt-2 max-w-2xl text-base text-stone-600">
-              {current.description}
-            </p>
+          {current.illustrationName && (
+            <div
+              ref={illustrationRef}
+              className="aspect-square w-32 shrink-0 overflow-hidden rounded-xl ring-1 ring-border shadow-sm sm:w-44 md:w-48"
+              style={{ backgroundColor: `${accentColor}0d` }}
+            >
+              <img
+                src={`/illustrations/${current.illustrationName}.png`}
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                className="h-full w-full object-cover"
+              />
+            </div>
           )}
         </header>
+      </div>
 
-        {/* Step body. min-h keeps the card height stable across steps so
-            the footer doesn't jump as the user clicks Next. */}
-        <div className="mt-7 min-h-[260px]">
-          <div className="grid gap-4 sm:grid-cols-2">
-            {current.fields.map((f) => (
-              <FieldControl
-                key={f.key}
-                def={f}
-                value={values[f.key]}
-                onChange={(v) => onChange(f.key, v)}
-              />
-            ))}
-          </div>
+      {/* Step body — natural height. min-h-[420px] is sized for the
+          largest step (DM "Tell us about your home", 9 fields → 5 rows
+          in 2-col grid) so smaller steps render at the same card
+          height. Reduced from 460→420px in 2026-06-10 to give the
+          overall card a better chance of fitting in standard laptop
+          viewports while sticky-pinned. */}
+      <div className="px-6 pb-6 pt-7 md:px-8 md:pb-8">
+        <div className="grid min-h-[420px] gap-4 sm:grid-cols-2">
+          {current.fields.map((f) => (
+            <FieldControl
+              key={f.key}
+              def={f}
+              value={values[f.key]}
+              onChange={(v) => onChange(f.key, v)}
+            />
+          ))}
         </div>
       </div>
 
@@ -572,8 +641,18 @@ export function InputCollector({
     }
   }
 
+  // We render the toggle + wizard as a Fragment (no wrapping div) so the
+  // wizard's containing block becomes the consumer page's outer wrapper
+  // — not a div that's only a few pixels taller than the wizard. That
+  // matters because InputWizard uses `position: sticky top-0` to pin
+  // itself when the user scrolls down to look at results. A sticky
+  // element can only stay stuck while its CONTAINING block remains in
+  // viewport; with a tightly-fitting wrapper here, the sticky scroll
+  // range was effectively zero (the wizard scrolled off with the
+  // wrapper). Fragmenting hands the wizard up to the page wrapper
+  // which extends well past the results panel.
   return (
-    <div className="space-y-3">
+    <>
       <ViewModeToggle mode={mode} onChange={choose} accentColor={accentColor} />
       {mode === 'wizard' ? (
         <InputWizard accentColor={accentColor} {...rest} />
@@ -588,7 +667,7 @@ export function InputCollector({
           finishLabel={rest.finishLabel}
         />
       )}
-    </div>
+    </>
   )
 }
 

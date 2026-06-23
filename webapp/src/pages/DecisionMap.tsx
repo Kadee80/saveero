@@ -130,6 +130,7 @@ const STEPS: WizardStep[] = [
     icon: Home,
     description:
       'Just a few details to help us build your decision map. Approximate numbers are perfectly fine.',
+    illustrationName: 'dm_step_home',
     fields: [
       // Conversational question per Van's deck — replaces nominal
       // "Hold period". The 'years' kind unchanged (already canonical).
@@ -150,6 +151,8 @@ const STEPS: WizardStep[] = [
   {
     title: 'Market & tax assumptions',
     icon: TrendingUp,
+    description: 'The big economic dials that shape every scenario — appreciation, taxes, and what selling a home actually costs.',
+    illustrationName: 'dm_step_market',
     fields: [
       { key: 'annual_appreciation', label: 'Home appreciation', kind: 'percent', hint: '/yr', help: 'decisionmap.input.annual_appreciation' },
       { key: 'selling_cost_pct', label: 'Selling costs', kind: 'percent', hint: 'of price', help: 'decisionmap.input.selling_cost_pct' },
@@ -160,6 +163,8 @@ const STEPS: WizardStep[] = [
   {
     title: 'Refinance terms',
     icon: Banknote,
+    description: 'The rate and terms you could get if you refinanced today. Only used by the Refinance scenario.',
+    illustrationName: 'dm_step_refinance',
     fields: [
       { key: 'refinance_rate', label: 'Refi rate', kind: 'percent', help: 'decisionmap.input.refinance_rate' },
       { key: 'refinance_term_months', label: 'Refi term', kind: 'months', help: 'decisionmap.input.refinance_term_months' },
@@ -175,6 +180,8 @@ const STEPS: WizardStep[] = [
   {
     title: 'Purchase of new home',
     icon: Building2,
+    description: 'The price you’d pay and how you’d finance it. Used by the Sell & Buy and Rent Out & Buy scenarios.',
+    illustrationName: 'dm_step_purchase',
     fields: [
       { key: 'target_new_home_value', label: 'New home price', kind: 'money', help: 'decisionmap.input.target_new_home_value' },
       { key: 'new_down_payment_pct', label: 'Down payment', kind: 'percent', help: 'decisionmap.input.new_down_payment_pct' },
@@ -188,7 +195,8 @@ const STEPS: WizardStep[] = [
   {
     title: 'New-home ongoing costs',
     icon: KeyRound,
-    description: 'Used by Sell & Buy and Rent Out & Buy.',
+    description: 'What it will cost to own the new home each month — taxes, insurance, HOA, upkeep. Used by Sell & Buy and Rent Out & Buy.',
+    illustrationName: 'dm_step_ongoing',
     fields: [
       { key: 'new_home_monthly_property_tax', label: 'Property tax', kind: 'money', hint: '/mo', help: 'decisionmap.input.new_home_monthly_property_tax' },
       { key: 'new_home_monthly_insurance', label: 'Insurance', kind: 'money', hint: '/mo', help: 'decisionmap.input.new_home_monthly_insurance' },
@@ -199,7 +207,8 @@ const STEPS: WizardStep[] = [
   {
     title: 'Rental income & expenses',
     icon: PiggyBank,
-    description: 'If you rent the current home.',
+    description: 'What renting your current home would look like — the rent it could fetch and the real costs of being a landlord.',
+    illustrationName: 'dm_step_rental',
     fields: [
       { key: 'gross_monthly_rent', label: 'Gross rent', kind: 'money', hint: '/mo', help: 'decisionmap.input.gross_monthly_rent' },
       { key: 'vacancy_rate', label: 'Vacancy', kind: 'percent', help: 'decisionmap.input.vacancy_rate' },
@@ -212,7 +221,8 @@ const STEPS: WizardStep[] = [
   {
     title: 'Liquidity check',
     icon: Compass,
-    description: 'Caps how aggressive a Rent Out & Buy plan can be.',
+    description: 'How much cash you have on hand for a next purchase. Caps how aggressive a Rent Out & Buy plan can be.',
+    illustrationName: 'dm_step_liquidity',
     fields: [
       { key: 'available_cash_for_purchase', label: 'Cash available for next purchase', kind: 'money', help: 'decisionmap.input.available_cash_for_purchase' },
     ],

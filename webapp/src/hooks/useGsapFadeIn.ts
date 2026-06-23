@@ -42,6 +42,14 @@ interface FadeOpts {
   duration?: number
   /** Delay in seconds before the animation starts. Default 0. */
   delay?: number
+  /**
+   * Optional value that re-runs the animation whenever it changes.
+   * Use this for elements that exist for the full lifetime of a
+   * component but should re-animate when the underlying content
+   * changes — e.g. a step wizard's heading should re-animate every
+   * time the user clicks Next. Pass the step index here.
+   */
+  triggerKey?: string | number
 }
 
 /**
@@ -52,7 +60,7 @@ export function useFadeInOnMount(
   ref: RefObject<HTMLElement>,
   opts: FadeOpts = {},
 ) {
-  const { y = Y_OFFSET, duration = DURATION, delay = 0 } = opts
+  const { y = Y_OFFSET, duration = DURATION, delay = 0, triggerKey } = opts
 
   useEffect(() => {
     const el = ref.current
@@ -73,7 +81,10 @@ export function useFadeInOnMount(
     }, el)
 
     return () => ctx.revert()
-  }, [ref, y, duration, delay])
+    // triggerKey lets callers re-run the animation when content changes —
+    // e.g. step wizards re-fading the heading each time the user clicks
+    // Next. When omitted, animation runs once on mount as before.
+  }, [ref, y, duration, delay, triggerKey])
 }
 
 /**
@@ -195,6 +206,7 @@ export function useSplitWordsIn(
     delay = 0,
     stagger = 0.04,
     trigger = 'scroll',
+    triggerKey,
   } = opts
 
   useEffect(() => {
@@ -235,5 +247,9 @@ export function useSplitWordsIn(
     }, el)
 
     return () => ctx.revert()
-  }, [ref, y, duration, delay, stagger, trigger])
+    // triggerKey lets callers re-run the split-and-animate when content
+    // changes — e.g. wizard step headings re-splitting on every Next.
+    // On change, the cleanup (split.revert) restores the previous DOM
+    // before the next effect run splits the new heading.
+  }, [ref, y, duration, delay, stagger, trigger, triggerKey])
 }
