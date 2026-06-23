@@ -29,7 +29,6 @@ import {
   ArrowLeft,
   Building2,
   Compass,
-  Info,
   TrendingUp,
 } from 'lucide-react'
 import {
@@ -64,7 +63,6 @@ export default function PortfolioBuilder() {
   return (
     <div className="mx-auto max-w-6xl space-y-8 p-6 md:py-10">
       <Header />
-      <PlaceholderBanner />
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -82,7 +80,6 @@ export default function PortfolioBuilder() {
           <PortfolioSummary data={result} />
           <TargetSummary data={result} />
           <StrategiesTable strategies={result.strategies} />
-          <OpenQuestionsCard />
         </>
       )}
     </div>
@@ -130,38 +127,6 @@ function Header() {
         Money.
       </p>
     </header>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Placeholder banner — flags the open questions on first sight.
-// ---------------------------------------------------------------------------
-
-function PlaceholderBanner() {
-  return (
-    <div
-      className="flex items-start gap-3 rounded-lg border px-4 py-3 text-sm"
-      style={{
-        borderColor: `${SCENARIO_PALETTE.amber}66`,
-        backgroundColor: `${SCENARIO_PALETTE.amber}14`,
-      }}
-    >
-      <Info
-        className="mt-0.5 h-4 w-4 shrink-0"
-        style={{ color: '#8a6a1f' }}
-      />
-      <div className="text-stone-700">
-        <p className="font-medium" style={{ color: '#8a6a1f' }}>
-          First stab — pending Van's weighting matrix.
-        </p>
-        <p className="mt-1">
-          Engine math is end-to-end and the workbook's recommendation matches
-          (HELOC, score 92). The four goal-weighting profiles all currently
-          point at the static V4.1 weights — swap them for the real matrix
-          when it lands.
-        </p>
-      </div>
-    </div>
   )
 }
 
@@ -351,7 +316,7 @@ function StrategiesTable({ strategies }: { strategies: ScoredStrategyOut[] }) {
                 {formatCurrency(s.capital_available)}
               </td>
               <td className="px-6 py-3 text-right tabular-nums">
-                {Math.round(s.capital_coverage * 100)}%
+                {Math.round(s.capital_coverage_pct * 100)}%
               </td>
               <td className="px-6 py-3 text-right text-lg font-bold tabular-nums">
                 {s.weighted_score}
@@ -379,46 +344,3 @@ function StrategiesTable({ strategies }: { strategies: ScoredStrategyOut[] }) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Open-questions card — read for tomorrow's discussion
-// ---------------------------------------------------------------------------
-
-function OpenQuestionsCard() {
-  return (
-    <section
-      className="rounded-xl border border-dashed p-6"
-      style={{ borderColor: `${ACCENT}66`, backgroundColor: `${ACCENT}08` }}
-    >
-      <h3 className="text-base font-semibold tracking-tight">For tomorrow's discussion</h3>
-      <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-stone-700">
-        <li>
-          <strong>Weighting matrix</strong> for the four goal profiles (Build Wealth / Passive
-          Income / Preserve Liquidity / Minimize Risk). Engine is wired through — all four
-          profiles use the static V4.1 weights until the matrix lands.
-        </li>
-        <li>
-          <strong>Property-type fit + risk heuristics.</strong> Sample sheet uses Long-Term Rental
-          fit=80, risk=70 — engine matches that, but the other five types are best-guess
-          placeholders. Worth a calibration pass with Van.
-        </li>
-        <li>
-          <strong>Lead role.</strong> Add <code>'investor'</code> to the <code>lead.role</code>{' '}
-          enum, or reuse <code>'homeowner'</code> with a new <code>intent='portfolio'</code>?
-        </li>
-        <li>
-          <strong>Branch surface name</strong> on the consumer side — workbook calls it{' '}
-          "Add to your Real Estate Portfolio"; shorter options are "Build Your Portfolio" /
-          "Add Another Property".
-        </li>
-        <li>
-          <strong>Intake wizard scope.</strong> 10-property cap from the workbook is generous;
-          should the wizard let users add one at a time, or upload a CSV?
-        </li>
-        <li>
-          <strong>Wealth Projection (sheet 8) — confirmed out of V1.</strong> Re-evaluate when
-          we want to drive recommendations on projected wealth impact.
-        </li>
-      </ol>
-    </section>
-  )
-}

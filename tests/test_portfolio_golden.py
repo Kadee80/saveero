@@ -132,6 +132,9 @@ def test_target_property_numbers_match_workbook(workbook_sample_inputs):
     assert t.pitia == pytest.approx(3_372.054, abs=0.1)
     assert t.dscr == pytest.approx(1.127, abs=0.001)
     assert t.monthly_cash_flow == pytest.approx(-72.05, abs=0.1)
+    # property_type_fit_score is still emitted by TargetPropertyMetrics
+    # (legacy / informational) — strategy scoring no longer reads it
+    # directly; LTW + risk now carry the property-type signal.
     assert t.property_type_fit_score == 80
     assert t.dscr_relevant is True
     assert t.bridge_hard_money_relevant is False
@@ -168,11 +171,11 @@ def test_capital_coverage_for_equity_strategies(workbook_sample_inputs):
     result = run_all(workbook_sample_inputs)
     by_key = {s.key: s for s in result.strategies}
     # HELOC, conv cash-out, no-ratio, combo should all cover the $140k need.
-    assert by_key["heloc_on_existing_equity"].capital_coverage == pytest.approx(1.0)
-    assert by_key["conventional_cash_out"].capital_coverage == pytest.approx(1.0)
-    assert by_key["no_ratio_asset_based_cash_out"].capital_coverage == pytest.approx(1.0)
+    assert by_key["heloc_on_existing_equity"].capital_coverage_pct == pytest.approx(1.0)
+    assert by_key["conventional_cash_out"].capital_coverage_pct == pytest.approx(1.0)
+    assert by_key["no_ratio_asset_based_cash_out"].capital_coverage_pct == pytest.approx(1.0)
     # Use cash: $75k available minus $25k buffer = $50k, vs $140k need = 0.357.
-    assert by_key["use_available_cash"].capital_coverage == pytest.approx(0.357, abs=0.001)
+    assert by_key["use_available_cash"].capital_coverage_pct == pytest.approx(0.357, abs=0.001)
 
 
 def test_bridge_low_for_non_flip_target(workbook_sample_inputs):
@@ -236,40 +239,93 @@ def test_fix_and_flip_uses_flip_capital(workbook_sample_inputs):
 
 
 # ---------------------------------------------------------------------------
-# Goal profiles — placeholder identity (all goals == same result today).
-# When Van's matrix lands, REPLACE this with a divergence test.
+# Goal profiles — Van's matrix landed 2026-06-23. Now we assert
+# divergence (the engine should produce meaningfully different scores
+# across goals) — the inverse of the prior placeholder assertion.
 # ---------------------------------------------------------------------------
 
-def test_placeholder_goal_profiles_are_identical(workbook_sample_inputs):
+def _run_with_goal(workbook_sample_inputs, goal: str):
+    new_profile = PortfolioProfile(
+        credit_score_bucket=workbook_sample_inputs.profile.credit_score_bucket,
+        income_profile=workbook_sample_inputs.profile.income_profile,
+        available_cash=workbook_sample_inputs.profile.available_cash,
+        investor_goal=goal,  # type: ignore[arg-type]
+        risk_tolerance=workbook_sample_inputs.profile.risk_tolerance,
+        time_horizon=workbook_sample_inputs.profile.time_horizon,
+        expected_annual_appreciation=workbook_sample_inputs.profile.expected_annual_appreciation,
+        estimated_acquisition_closing_costs_pct=workbook_sample_inputs.profile.estimated_acquisition_closing_costs_pct,
+        target_down_payment_pct=workbook_sample_inputs.profile.target_down_payment_pct,
+    )
+    inputs = PortfolioInputs(
+        profile=new_profile,
+        existing_properties=workbook_sample_inputs.existing_properties,
+        target_property=workbook_sample_inputs.target_property,
+    )
+    return run_all(inputs)
+
+
+def test_goal_profiles_diverge(workbook_sample_inputs):
     """
-    PLACEHOLDER: until Van provides the actual weighting matrix, all
-    four goal profiles use the static V4.1 weights, so different goals
-    produce identical scores. Replace with a divergence assertion once
-    real weights ship — this test should FAIL when the engine starts
-    differentiating, which is the signal to swap it for a real one.
+    The four goal profiles must produce meaningfully different scores
+    for the same input — otherwise the matrix isn't doing any work and
+    we've regressed to the placeholder.
     """
     goals = ("Build Wealth", "Generate Passive Income", "Preserve Liquidity", "Minimize Risk")
-    scores_per_goal = []
+    score_tuples = []
     for g in goals:
-        new_profile = PortfolioProfile(
-            credit_score_bucket=workbook_sample_inputs.profile.credit_score_bucket,
-            income_profile=workbook_sample_inputs.profile.income_profile,
-            available_cash=workbook_sample_inputs.profile.available_cash,
-            investor_goal=g,
-            risk_tolerance=workbook_sample_inputs.profile.risk_tolerance,
-            time_horizon=workbook_sample_inputs.profile.time_horizon,
-            expected_annual_appreciation=workbook_sample_inputs.profile.expected_annual_appreciation,
-            estimated_acquisition_closing_costs_pct=workbook_sample_inputs.profile.estimated_acquisition_closing_costs_pct,
-            target_down_payment_pct=workbook_sample_inputs.profile.target_down_payment_pct,
-        )
-        inputs = PortfolioInputs(
-            profile=new_profile,
-            existing_properties=workbook_sample_inputs.existing_properties,
-            target_property=workbook_sample_inputs.target_property,
-        )
-        result = run_all(inputs)
-        scores_per_goal.append(
+        result = _run_with_goal(workbook_sample_inputs, g)
+        score_tuples.append(
             tuple((s.key, s.weighted_score) for s in sorted(result.strategies, key=lambda x: x.key))
         )
-    # All four goals should produce identical scoring (placeholder state).
-    assert scores_per_goal[0] == scores_per_goal[1] == scores_per_goal[2] == scores_per_goal[3]
+    # Each pair of profiles must differ on at least one strategy's score.
+    for i in range(len(goals)):
+        for j in range(i + 1, len(goals)):
+            assert score_tuples[i] != score_tuples[j], (
+                f"{goals[i]} and {goals[j]} produced identical scores — "
+                "matrix wiring is broken or weights collapsed to the same profile"
+            )
+
+
+def test_van_matrix_weights_sum_to_100():
+    """Sanity check Van's matrix — each profile's weights sum to 100."""
+    from portfolio.goal_profiles import GOAL_PROFILES
+    for goal, weights in GOAL_PROFILES.items():
+        total = weights.sum_check()
+        assert total == 100, f"Goal {goal!r} weights sum to {total}, not 100"
+
+
+def test_build_wealth_favors_leverage_over_cash(workbook_sample_inputs):
+    """
+    Build Wealth weights Long-Term Wealth Impact at 35% — leverage
+    strategies (HELOC, Conventional, DSCR, No-Ratio, Combination) should
+    out-score Use Available Cash for the Build Wealth profile.
+    """
+    r = _run_with_goal(workbook_sample_inputs, "Build Wealth")
+    by_key = {s.key: s for s in r.strategies}
+    cash = by_key["use_available_cash"].weighted_score
+    assert by_key["heloc_on_existing_equity"].weighted_score > cash
+    assert by_key["no_ratio_asset_based_cash_out"].weighted_score > cash
+
+
+def test_minimize_risk_pushes_bridge_to_bottom(workbook_sample_inputs):
+    """
+    Minimize Risk weights Risk at 30% — Bridge / Hard Money should still
+    be at the bottom of the rankings (high financing risk + LTR target).
+    """
+    r = _run_with_goal(workbook_sample_inputs, "Minimize Risk")
+    bridge = next(s for s in r.strategies if s.key == "bridge_hard_money_private_capital")
+    assert bridge.rank == 8
+
+
+def test_preserve_liquidity_demotes_cash(workbook_sample_inputs):
+    """
+    Preserve Liquidity weights Liquidity Preservation at 40% — Use
+    Available Cash should score LOW because deploying cash literally
+    reduces liquidity.
+    """
+    r = _run_with_goal(workbook_sample_inputs, "Preserve Liquidity")
+    by_key = {s.key: s for s in r.strategies}
+    cash = by_key["use_available_cash"]
+    heloc = by_key["heloc_on_existing_equity"]
+    assert cash.weighted_score < heloc.weighted_score
+    assert cash.liquidity_preservation < heloc.liquidity_preservation

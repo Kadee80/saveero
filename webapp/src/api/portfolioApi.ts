@@ -151,20 +151,26 @@ export type StrategyKey =
 export interface ScoredStrategyOut {
   key: StrategyKey
   name: string
+  // Capital math (context, not weighted directly)
   capital_available: number
   capital_needed: number
-  capital_coverage: number
-  credit_score: number
-  liquidity_score: number
-  cash_flow_score: number
-  eligibility_score: number
-  complexity_score: number
-  risk_score: number
-  property_fit: number
+  capital_coverage_pct: number
+  // The seven scoring dimensions — Van's canonical names. Renaming
+  // requires changing portfolio/strategy_scoring.py + schemas.py in
+  // lockstep with this file.
+  capital_availability: number
+  credit_fit: number
+  liquidity_preservation: number
+  cash_flow_impact: number
+  long_term_wealth_impact: number
+  complexity: number
+  risk: number
+  // Final
   weighted_score: number
   rank: number
+  // Consumer language
   consumer_output: string
-  formula_check: string
+  capital_check: string
   key_tradeoff: string
   recommendation_type: string
   property_type_note: string

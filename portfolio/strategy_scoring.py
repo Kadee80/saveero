@@ -4,25 +4,42 @@ portfolio/strategy_scoring.py
 The engine core: score and rank acquisition strategies for the user's
 target property.
 
-Mirrors sheet 7 (`Strategy_Scoring`) of the workbook. Eight strategies
-in v1 — but strategies are NOT a closed enum (Van email 2026-05-15:
-"will prob add additional strategies and strategy combinations over
-time"). The scoring loop iterates over a list of `Strategy` dataclasses;
-adding a strategy is a single append plus a column-formula function.
+V2 (2026-06-23): rewired to Van's seven-factor model from
+`Investor_Objective_Weightings.xlsx`. The factor list is canonical —
+schemas.py, portfolioApi.ts, and PortfolioBuilder.tsx all use these
+exact names.
 
-Per-strategy formulas come from the workbook's columns B-J + R (sheet
-7). Each strategy has its own way of computing each factor — they're
-not uniform — so we encode them as small per-strategy methods rather
-than a generic table. Re-reads cleanly against the spreadsheet next to
-each other.
+Strategies are NOT a closed enum — `_STRATEGIES` is a tuple, adding a
+new strategy is one append + per-column functions. Van confirmed in
+his original email he intends to grow this list over time.
 
-Outputs:
-    ScoredStrategy — one row per strategy with all factors + final score
-                     + rank + consumer-facing language
+Factor model (changes from V1):
+  - capital_availability       (was capital_coverage; folds eligibility in:
+                                if you're ineligible, your capital from
+                                this source = 0, so availability = 0)
+  - credit_fit                 (was credit_score)
+  - liquidity_preservation     (was liquidity_score)
+  - cash_flow_impact           (was cash_flow_score)
+  - long_term_wealth_impact    (NEW; heuristic — see _long_term_wealth_impact)
+  - complexity                 (unchanged)
+  - risk                       (unchanged shape; absorbs 30% of the old
+                                property-type-fit signal via per-type
+                                risk adjustments)
+
+The old `property_type_fit` dimension was split: ~70% of its signal
+landed in long_term_wealth_impact (strategy×type fit drives long-term
+compounding) and ~30% in risk (strategy×type fit also affects risk).
+
+The old `eligibility` dimension was folded into capital_availability
+— "is this strategy eligible for you" and "how much capital does this
+strategy give you access to" are the same question expressed two ways.
+
+These three modeling calls were made engineer-led and need Van's
+ratification — see the email-to-Van follow-up.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Literal
 
 from .goal_profiles import GoalWeights
@@ -38,9 +55,7 @@ from .target_property import TargetPropertyMetrics
 
 
 # ---------------------------------------------------------------------------
-# Stable string keys for the eight v1 strategies.
-# Keeping these as Literal so the frontend/types layer benefits but
-# leaving the actual strategy list open to extension via append.
+# Strategy keys (v1 — open-ended list, not a closed enum)
 # ---------------------------------------------------------------------------
 
 StrategyKey = Literal[
@@ -56,7 +71,7 @@ StrategyKey = Literal[
 
 
 # ---------------------------------------------------------------------------
-# The output row
+# Output row — one per strategy
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -64,30 +79,29 @@ class ScoredStrategy:
     key: StrategyKey
     name: str
 
-    # Capital math
+    # Capital math (for context — not weighted directly into the score)
     capital_available: float
     capital_needed: float
-    capital_coverage: float       # 0-1 (clamped)
+    capital_coverage_pct: float       # 0.0-1.0 (clamped)
 
-    # Per-factor scores (all 0-100)
-    credit_score: float
-    liquidity_score: float
-    cash_flow_score: float
-    eligibility_score: float
-    complexity_score: float
-    risk_score: float
-    property_fit: float
+    # The seven scoring dimensions — Van's canonical names. All 0-100.
+    capital_availability: float
+    credit_fit: float
+    liquidity_preservation: float
+    cash_flow_impact: float
+    long_term_wealth_impact: float
+    complexity: float
+    risk: float
 
-    # Final weighted score (0-100ish; technically 0-110 with the
-    # workbook's quirky scaling, but functionally compared relatively).
+    # Weighted total — sum(dim * weight) / 100. Lives on 0-100.
     weighted_score: float
-    rank: int                     # 1 = best
+    rank: int                         # 1 = best
 
-    # Consumer-facing language (mirrors columns M, N, P, Q, S, T)
+    # Consumer-facing language
     consumer_output: str
-    formula_check: str            # "Capital need covered" / "Capital gap remains"
+    capital_check: str                # "Capital need covered" / "Capital gap remains"
     key_tradeoff: str
-    recommendation_type: str      # "Recommended" / "Alternative" / "Stretch" / "Other"
+    recommendation_type: str          # "Recommended" / "Alternative" / "Stretch" / "Other"
     property_type_note: str
     product_logic_fit: str
 
@@ -97,26 +111,57 @@ class ScoredStrategy:
 # ---------------------------------------------------------------------------
 
 _CREDIT_BUCKET_SCORES: dict[CreditBucket, float] = {
-    "740+": 100,
-    "700-739": 90,
-    "660-699": 75,
-    "<660": 50,
+    "740+":    100,
+    "700-739":  90,
+    "660-699":  75,
+    "<660":     50,
 }
 
 
-def _credit_score(profile: PortfolioProfile) -> float:
+def _credit_fit(profile: PortfolioProfile) -> float:
     return _CREDIT_BUCKET_SCORES.get(profile.credit_score_bucket, 50)
 
 
 # ---------------------------------------------------------------------------
-# Per-property-type risk + cash-flow score helpers (replicates the
-# conditional branches in sheet 7).
+# Property-type risk adjustments — absorbs ~30% of the old
+# property_type_fit signal. Negative = riskier (lowers the risk score
+# which is "higher = lower risk").
+# ---------------------------------------------------------------------------
+
+_TYPE_RISK_ADJUST: dict[TargetPropertyType, float] = {
+    "Long-Term Rental":                          0,
+    "Short-Term Rental":                        -5,
+    "Residential Multifamily (2-4 Units)":       0,
+    "Commercial Multifamily (5+ Units)":        -3,
+    "Vacation Home":                            -7,
+    "Fix & Flip":                              -10,
+}
+
+
+def _risk_score_for_strategy(
+    target_type: TargetPropertyType,
+    strategy_adjustment: float,
+) -> float:
+    """
+    Base + per-strategy adjustment + per-property-type adjustment.
+    Higher = lower risk (i.e. better score on the risk dimension).
+    """
+    type_baseline = {
+        "Long-Term Rental":                       70,
+        "Short-Term Rental":                      60,
+        "Residential Multifamily (2-4 Units)":    70,
+        "Commercial Multifamily (5+ Units)":      55,
+        "Vacation Home":                          55,
+        "Fix & Flip":                             55,
+    }.get(target_type, 65)
+    return max(0.0, min(100.0, type_baseline + strategy_adjustment + _TYPE_RISK_ADJUST.get(target_type, 0)))
+
+
+# ---------------------------------------------------------------------------
+# Cash flow impact — same shape as before (rename only)
 # ---------------------------------------------------------------------------
 
 def _flip_cash_flow_score(target: TargetProperty, rules: ProductRules) -> float:
-    """For Fix & Flip: high score if projected gross ROI exceeds target."""
-    # Recompute projected ROI inline rather than threading target_metrics
-    # since the workbook does it independently per strategy column.
     profit = (
         target.arv
         - target.target_purchase_price
@@ -130,12 +175,11 @@ def _flip_cash_flow_score(target: TargetProperty, rules: ProductRules) -> float:
     return 60
 
 
-def _cash_flow_score(target_metrics: TargetPropertyMetrics, target: TargetProperty, rules: ProductRules) -> float:
-    """
-    Generic across most strategies. Workbook column G formula —
-    Fix & Flip uses the ROI threshold; everything else compares
-    DSCR + monthly cash flow against thresholds.
-    """
+def _cash_flow_impact(
+    target_metrics: TargetPropertyMetrics,
+    target: TargetProperty,
+    rules: ProductRules,
+) -> float:
     if target.target_property_type == "Fix & Flip":
         return _flip_cash_flow_score(target, rules)
     if target_metrics.dscr >= 1.25 and target_metrics.monthly_cash_flow > 0:
@@ -145,25 +189,46 @@ def _cash_flow_score(target_metrics: TargetPropertyMetrics, target: TargetProper
     return 45
 
 
-def _risk_score_by_type(target_type: TargetPropertyType) -> float:
+# ---------------------------------------------------------------------------
+# Long-Term Wealth Impact — the NEW dimension. Heuristic blend of:
+#   - whether the strategy retains the underlying asset(s) (leverage
+#     compounds existing equity vs. selling gives up that compounding)
+#   - whether the strategy adds leverage to the new acquisition
+#   - whether the strategy preserves a favorable existing rate
+#   - the target property type's intrinsic long-term wealth profile
+#
+# Per-strategy LTW base × property-type multiplier × strategy×type fit
+# adjustment. Engineer-led — needs Van's ratification.
+# ---------------------------------------------------------------------------
+
+_TYPE_LTW_MULTIPLIER: dict[TargetPropertyType, float] = {
+    "Long-Term Rental":                       1.00,
+    "Short-Term Rental":                      0.90,   # revenue volatility tax
+    "Residential Multifamily (2-4 Units)":    1.05,   # forced-appreciation potential
+    "Commercial Multifamily (5+ Units)":      1.10,   # NOI growth potential
+    "Vacation Home":                          0.80,   # mixed-use drag
+    "Fix & Flip":                             0.50,   # not a long-term hold
+}
+
+
+def _long_term_wealth_impact(
+    strategy_ltw_base: float,
+    strategy_type_fit_adjustment: float,
+    target_type: TargetPropertyType,
+) -> float:
     """
-    Workbook column J — risk score by target property type.
-    Higher = lower risk. Numbers tuned to the LTR=70 baseline shown in
-    the sheet 7 sample; revisit with Van for the matrix.
+    LTW = base * type_multiplier + strategy×type adjustment, clamped 0-100.
+
+    Bridge into Fix&Flip = high LTW. Bridge into LTR = terrible LTW
+    (you'd have to refi out fast). Captured via the adjustment.
     """
-    return {
-        "Long-Term Rental":                       70,
-        "Short-Term Rental":                      60,
-        "Residential Multifamily (2-4 Units)":    70,
-        "Commercial Multifamily (5+ Units)":      55,
-        "Vacation Home":                          55,
-        "Fix & Flip":                             55,
-    }.get(target_type, 65)
+    raw = strategy_ltw_base * _TYPE_LTW_MULTIPLIER.get(target_type, 1.0) + strategy_type_fit_adjustment
+    return max(0.0, min(100.0, raw))
 
 
 # ---------------------------------------------------------------------------
-# Strategy definitions — each describes how to compute its column values.
-# Adding a new strategy is a single append at the bottom of build_strategies.
+# Strategy definitions — extensible registry.
+# Adding a new strategy is one append + per-column functions.
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -171,63 +236,94 @@ class _StrategyDef:
     key: StrategyKey
     name: str
     capital_available_fn: Callable[
-        [PortfolioAnalytics, PortfolioProfile, ProductRules], float
+        [PortfolioAnalytics, PortfolioProfile, TargetProperty, ProductRules], float
     ]
-    liquidity_score: float
-    complexity_score: float
-    risk_score_adjustment: float = 0.0
+    # Long-term wealth base (0-100) — see _long_term_wealth_impact
+    ltw_base: float
+    liquidity_preservation: float    # 0-100
+    complexity: float                # 0-100 (higher = simpler)
+    risk_adjustment: float = 0.0     # added to type baseline; negative = riskier
+    eligibility_gate: Callable[
+        [PortfolioProfile, TargetProperty], bool
+    ] | None = None
     """
-    Adjustment vs. the property-type baseline (e.g. Bridge takes -45,
-    Combination takes -10). Replicates the per-strategy risk delta
-    visible in sheet 7's J column.
-    """
-    eligibility_strong: bool = True
-    """
-    Used by the eligibility column — Bridge/Hard Money tanks unless the
-    target is a flip. We let strategy defs encode their own override.
+    Optional gate. If supplied and returns False, capital_available is
+    forced to 0 even if the source has equity — folds the old
+    eligibility dimension into capital_availability.
     """
     key_tradeoff: str = ""
     product_logic_fit: str = ""
     property_type_note: str = ""
 
 
-# Capital-available helpers
-def _cash_after_buffer(_a, profile, rules):
+# Capital-available helpers — all take (analytics, profile, target, rules).
+def _cash_after_buffer(_a, profile, _t, rules):
     return max(0.0, profile.available_cash - rules.cash_reserve_buffer)
 
 
-def _heloc_capital(a, _p, _r): return a.summary.total_heloc_accessible_equity
-def _cash_out_capital(a, _p, _r): return a.summary.total_cash_out_accessible_equity
-def _dscr_capital(a, _p, _r):
-    # DSCR cash-out only applies to investment properties. Approximation:
-    # subtract the primary residence's contribution from the total. The
-    # workbook does this implicitly by selecting only investment rows.
-    inv = sum(
+def _heloc_capital(a, _p, _t, _r): return a.summary.total_heloc_accessible_equity
+def _cash_out_capital(a, _p, _t, _r): return a.summary.total_cash_out_accessible_equity
+def _dscr_capital(a, _p, _t, _r):
+    return sum(
         p.dscr_no_ratio_accessible_equity
         for p in a.properties
         if p.property_type != "Primary Residence"
     )
-    return inv
-def _no_ratio_capital(a, _p, _r):
-    # Mirror image of _dscr_capital — primary residence only.
+def _no_ratio_capital(a, _p, _t, _r):
     return sum(
         p.dscr_no_ratio_accessible_equity
         for p in a.properties
         if p.property_type == "Primary Residence"
     )
-def _sell_capital(a, profile, _r):
-    # Selling unlocks all equity (minus closing costs); approximate as
-    # total equity + the available cash already on hand.
-    return a.summary.total_equity * 0.93 + profile.available_cash * 0  # closing ~7%; cash counted separately
-def _combo_capital(a, _p, _r):
-    # HELOC + DSCR / no-ratio — what the workbook pairs in the
-    # "Combination" row.
+def _sell_capital(a, _p, _t, _r):
+    return a.summary.total_equity * 0.93  # net of ~7% selling cost
+def _combo_capital(a, _p, _t, _r):
     return a.summary.total_heloc_accessible_equity + (a.summary.total_dscr_no_ratio_accessible_equity * 0.5)
-def _bridge_capital(_a, _p, _r):
-    # Bridge / hard money funded externally — workbook treats this as
-    # zero "available" relative to the user's own balance sheet. The
-    # eligibility scoring is what gates this strategy.
+def _bridge_capital(_a, _p, target, rules):
+    # Bridge / hard money funds against ARV (when applicable). Outside
+    # of Fix & Flip the strategy's eligibility gate will block it, so
+    # this just returns 0 for non-flip targets.
+    if target.target_property_type == "Fix & Flip" and target.arv > 0:
+        return target.arv * rules.bridge_hard_money_advance_pct
     return 0.0
+
+
+# Strategy×target-type fit adjustments (the residual of the old
+# property_type_fit dimension after splitting 70/30 into LTW + risk).
+def _strategy_type_fit_adjustment(key: str, t: TargetPropertyType) -> float:
+    if key == "dscr_cash_out_on_rental":
+        if t in (
+            "Long-Term Rental",
+            "Short-Term Rental",
+            "Residential Multifamily (2-4 Units)",
+        ):
+            return 10
+        return -20
+    if key == "bridge_hard_money_private_capital":
+        return 40 if t == "Fix & Flip" else -40
+    if key == "sell_and_redeploy":
+        return -15  # gives up future upside in the sold asset
+    return 0
+
+
+# Per-strategy eligibility gate (returns True if the strategy is
+# accessible for this profile + target).
+def _gate_credit_ok(profile: PortfolioProfile, _target: TargetProperty) -> bool:
+    return _credit_fit(profile) >= 75   # 660-699 or better
+
+
+def _gate_bridge_eligible(profile: PortfolioProfile, target: TargetProperty) -> bool:
+    return (
+        target.target_property_type == "Fix & Flip"
+        and _credit_fit(profile) >= 75
+    )
+
+
+def _gate_dscr_eligible(profile: PortfolioProfile, target: TargetProperty) -> bool:
+    # DSCR is for investment properties; ineligible for owner-occupied
+    # primary acquisitions. Vacation home is a coin flip — we let it
+    # through but rely on the strategy×type LTW adjustment to penalize.
+    return target.target_property_type != "Vacation Home" or _credit_fit(profile) >= 75
 
 
 _STRATEGIES: tuple[_StrategyDef, ...] = (
@@ -235,9 +331,10 @@ _STRATEGIES: tuple[_StrategyDef, ...] = (
         key="use_available_cash",
         name="Use Available Cash",
         capital_available_fn=_cash_after_buffer,
-        liquidity_score=0,
-        complexity_score=95,
-        risk_score_adjustment=20,
+        ltw_base=55,                   # no leverage = lower long-term compounding
+        liquidity_preservation=15,     # cash deployment kills liquidity
+        complexity=95,
+        risk_adjustment=10,            # safest from a financing-risk lens
         key_tradeoff="Reduces liquidity",
         product_logic_fit="Liquidity-driven",
         property_type_note="Cash is simple but reduces liquidity.",
@@ -246,9 +343,10 @@ _STRATEGIES: tuple[_StrategyDef, ...] = (
         key="heloc_on_existing_equity",
         name="HELOC on Existing Equity",
         capital_available_fn=_heloc_capital,
-        liquidity_score=80,
-        complexity_score=75,
-        risk_score_adjustment=0,
+        ltw_base=90,                   # retains 1st mortgage rate + adds leverage
+        liquidity_preservation=80,
+        complexity=75,
+        risk_adjustment=-5,            # variable-rate exposure
         key_tradeoff="Adds variable-rate debt",
         product_logic_fit="Equity-access",
         property_type_note="HELOC preserves existing first mortgage while accessing equity.",
@@ -257,9 +355,10 @@ _STRATEGIES: tuple[_StrategyDef, ...] = (
         key="conventional_cash_out",
         name="Conventional Cash-Out",
         capital_available_fn=_cash_out_capital,
-        liquidity_score=70,
-        complexity_score=65,
-        risk_score_adjustment=-5,
+        ltw_base=75,                   # replaces existing mortgage (may lose good rate)
+        liquidity_preservation=70,
+        complexity=65,
+        risk_adjustment=-5,
         key_tradeoff="Pricing/eligibility vary by lender",
         product_logic_fit="Full-doc / equity-access",
         property_type_note="Conventional cash-out can access equity but may be income/DTI constrained.",
@@ -268,9 +367,10 @@ _STRATEGIES: tuple[_StrategyDef, ...] = (
         key="dscr_cash_out_on_rental",
         name="DSCR Cash-Out on Rental",
         capital_available_fn=_dscr_capital,
-        liquidity_score=75,
-        complexity_score=70,
-        risk_score_adjustment=0,
+        ltw_base=80,                   # retain + leverage on investment asset
+        liquidity_preservation=75,
+        complexity=70,
+        eligibility_gate=_gate_dscr_eligible,
         key_tradeoff="Pricing/eligibility vary by lender",
         product_logic_fit="Rental-income / DSCR",
         property_type_note="DSCR is relevant when rental income supports financing.",
@@ -279,9 +379,10 @@ _STRATEGIES: tuple[_StrategyDef, ...] = (
         key="no_ratio_asset_based_cash_out",
         name="No-Ratio / Asset-Based Cash-Out",
         capital_available_fn=_no_ratio_capital,
-        liquidity_score=75,
-        complexity_score=75,
-        risk_score_adjustment=0,
+        ltw_base=80,
+        liquidity_preservation=75,
+        complexity=75,
+        eligibility_gate=_gate_credit_ok,
         key_tradeoff="Pricing/eligibility vary by lender",
         product_logic_fit="Equity / no-ratio",
         property_type_note="No-ratio may work when income documentation is difficult but equity is strong.",
@@ -290,9 +391,10 @@ _STRATEGIES: tuple[_StrategyDef, ...] = (
         key="sell_and_redeploy",
         name="Sell & Redeploy",
         capital_available_fn=_sell_capital,
-        liquidity_score=60,
-        complexity_score=55,
-        risk_score_adjustment=-15,
+        ltw_base=45,                   # gives up future upside in sold asset
+        liquidity_preservation=60,
+        complexity=55,
+        risk_adjustment=-10,           # redeployment timing risk
         key_tradeoff="Gives up future upside in sold property",
         product_logic_fit="Redeployment",
         property_type_note="Sell creates capital but gives up future ownership upside.",
@@ -301,9 +403,11 @@ _STRATEGIES: tuple[_StrategyDef, ...] = (
         key="combination_strategy",
         name="Combination Strategy",
         capital_available_fn=_combo_capital,
-        liquidity_score=65,
-        complexity_score=60,
-        risk_score_adjustment=-10,
+        ltw_base=85,
+        liquidity_preservation=65,
+        complexity=60,
+        risk_adjustment=-5,
+        eligibility_gate=_gate_credit_ok,
         key_tradeoff="Pricing/eligibility vary by lender",
         product_logic_fit="Blended strategy",
         property_type_note="Combination can pair equity access with product-specific acquisition financing.",
@@ -312,10 +416,11 @@ _STRATEGIES: tuple[_StrategyDef, ...] = (
         key="bridge_hard_money_private_capital",
         name="Bridge / Hard Money / Private Capital",
         capital_available_fn=_bridge_capital,
-        liquidity_score=55,
-        complexity_score=30,
-        risk_score_adjustment=-50,
-        eligibility_strong=False,
+        ltw_base=35,                   # short-term/high-cost
+        liquidity_preservation=55,
+        complexity=30,
+        risk_adjustment=-30,
+        eligibility_gate=_gate_bridge_eligible,
         key_tradeoff="Higher cost / shorter-term project financing",
         product_logic_fit="Project financing",
         property_type_note="Bridge/hard money is usually lower fit unless the target is a project/flip.",
@@ -324,15 +429,13 @@ _STRATEGIES: tuple[_StrategyDef, ...] = (
 
 
 # ---------------------------------------------------------------------------
-# Per-strategy column formulas — eligibility + property_fit have
-# strategy-specific quirks. Encoded here so scoring stays declarative.
+# Liquidity preservation — special-cased for "Use Available Cash"
+# because deploying cash literally reduces liquidity.
 # ---------------------------------------------------------------------------
 
-def _liquidity_score_use_cash(profile: PortfolioProfile, target_metrics: TargetPropertyMetrics) -> float:
-    """
-    Workbook column F formula for the Use Cash row:
-    100 * (cash - needed) / cash, clamped 0-100.
-    """
+def _liquidity_preservation_use_cash(
+    profile: PortfolioProfile, target_metrics: TargetPropertyMetrics,
+) -> float:
     cash = profile.available_cash
     needed = target_metrics.total_capital_needed
     if cash <= 0:
@@ -340,84 +443,23 @@ def _liquidity_score_use_cash(profile: PortfolioProfile, target_metrics: TargetP
     return max(0.0, min(100.0, 100.0 * (cash - needed) / max(1.0, cash)))
 
 
-def _eligibility(
-    strat: _StrategyDef,
-    coverage: float,
-    profile: PortfolioProfile,
-    target: TargetProperty,
-) -> float:
-    """
-    Workbook column H. Each strategy has its own formula but the shape is
-    "if you can cover capital and meet credit, you're eligible."
-    """
-    credit_ok = _credit_score(profile) >= 75  # 660-699 or better
-    if strat.key == "use_available_cash":
-        return 90 if coverage >= 1.0 else 50
-    if strat.key == "bridge_hard_money_private_capital":
-        # Bridge is high-eligibility only when target is a flip.
-        if target.target_property_type == "Fix & Flip":
-            return 80 if credit_ok else 60
-        return 25
-    if strat.key == "dscr_cash_out_on_rental":
-        # DSCR depends on existing rental DSCR. Approximation: if any
-        # capital flows through, it means we found qualifying inv equity.
-        if coverage > 0 and credit_ok:
-            return 90 if target.target_property_type != "Fix & Flip" else 75
-        return 35
-    # Generic equity-access strategies (HELOC, cash-out, no-ratio, combo)
-    if coverage >= 1.0 and credit_ok:
-        return 85
-    if coverage > 0 and credit_ok:
-        return 70
-    return 40
+# ---------------------------------------------------------------------------
+# Consumer language
+# ---------------------------------------------------------------------------
 
-
-def _property_fit_for_strategy(
-    strat: _StrategyDef,
-    base_fit: float,
-    target_type: TargetPropertyType,
-) -> float:
-    """
-    Workbook column R. Most strategies just use the type's base fit;
-    some are penalized for type mismatch (e.g. DSCR on a Fix & Flip).
-    """
-    if strat.key == "dscr_cash_out_on_rental":
-        return base_fit + 10 if target_type in (
-            "Long-Term Rental",
-            "Short-Term Rental",
-            "Residential Multifamily (2-4 Units)",
-        ) else max(0, base_fit - 20)
-    if strat.key == "bridge_hard_money_private_capital":
-        return 95 if target_type == "Fix & Flip" else 25
-    if strat.key == "sell_and_redeploy":
-        return max(0, base_fit - 15)
-    return base_fit
-
-
-def _recommendation_type(score: float, key: StrategyKey, target_type: TargetPropertyType) -> str:
-    """
-    Workbook column Q. Top-scoring path is "Recommended"; runners-up
-    get labeled based on their character.
-    """
-    if score >= 85:
+def _recommendation_type(score: float, key: StrategyKey, _target_type: TargetPropertyType) -> str:
+    if score >= 80:
         return "Recommended"
-    if key == "bridge_hard_money_private_capital":
-        return "Other"
-    if key in ("no_ratio_asset_based_cash_out", "sell_and_redeploy"):
-        return "Alternative"
-    if key == "conventional_cash_out":
-        return "Stretch"
+    if score >= 65:
+        if key in ("no_ratio_asset_based_cash_out", "sell_and_redeploy"):
+            return "Alternative"
+        if key == "conventional_cash_out":
+            return "Stretch"
     return "Other"
 
 
 def _consumer_output(name: str, score: float, target_type: TargetPropertyType) -> str:
-    """Workbook column M — the user-visible explanation."""
-    if score >= 85:
-        verdict = "strong"
-    elif score >= 70:
-        verdict = "possible"
-    else:
-        verdict = "lower-fit"
+    verdict = "strong" if score >= 80 else "possible" if score >= 65 else "lower-fit"
     return (
         f"{name} appears to be a {verdict} path for a {target_type} based on "
         f"the information provided."
@@ -437,10 +479,18 @@ def score_strategies(
     rules: ProductRules = DEFAULT_PRODUCT_RULES,
 ) -> list[ScoredStrategy]:
     rows: list[ScoredStrategy] = []
-    credit = _credit_score(profile)
+    credit = _credit_fit(profile)
 
     for strat in _STRATEGIES:
-        capital_available = strat.capital_available_fn(portfolio, profile, rules)
+        # Eligibility-gated capital — folds the old eligibility dimension in.
+        eligible = (
+            strat.eligibility_gate(profile, target)
+            if strat.eligibility_gate
+            else True
+        )
+        capital_available = (
+            strat.capital_available_fn(portfolio, profile, target, rules) if eligible else 0.0
+        )
         capital_needed = target_metrics.total_capital_needed
         coverage = (
             min(1.0, capital_available / capital_needed)
@@ -448,31 +498,41 @@ def score_strategies(
             else 0.0
         )
 
+        # Capital availability (0-100) = coverage × 100, gated by eligibility.
+        capital_availability = round(coverage * 100.0, 2)
+
+        # Liquidity preservation — use-cash gets a dynamic value, everyone
+        # else uses the strategy's static profile.
         if strat.key == "use_available_cash":
-            liquidity = _liquidity_score_use_cash(profile, target_metrics)
+            liquidity = _liquidity_preservation_use_cash(profile, target_metrics)
         else:
-            liquidity = strat.liquidity_score
+            liquidity = strat.liquidity_preservation
 
-        cash_flow = _cash_flow_score(target_metrics, target, rules)
-        eligibility = _eligibility(strat, coverage, profile, target)
-        complexity = strat.complexity_score
-        base_risk = _risk_score_by_type(target.target_property_type)
-        risk = max(0.0, base_risk + strat.risk_score_adjustment)
-        property_fit = _property_fit_for_strategy(
-            strat, target_metrics.property_type_fit_score, target.target_property_type
+        cash_flow = _cash_flow_impact(target_metrics, target, rules)
+
+        # Long-term wealth impact — strategy × type
+        ltw = _long_term_wealth_impact(
+            strategy_ltw_base=strat.ltw_base,
+            strategy_type_fit_adjustment=_strategy_type_fit_adjustment(
+                strat.key, target.target_property_type,
+            ),
+            target_type=target.target_property_type,
         )
 
-        raw_score = (
-            coverage * weights.capital_coverage_weight
-            + credit * weights.credit_score_weight
-            + liquidity * weights.liquidity_score_weight
-            + cash_flow * weights.cash_flow_score_weight
-            + eligibility * weights.eligibility_score_weight
-            + complexity * weights.complexity_score_weight
-            + risk * weights.risk_score_weight
-            + property_fit * weights.property_fit_weight
-        )
-        weighted_score = round(raw_score)
+        complexity = strat.complexity
+        risk = _risk_score_for_strategy(target.target_property_type, strat.risk_adjustment)
+
+        # Final weighted score — weights sum to 100, divide by 100 to land 0-100.
+        raw = (
+            capital_availability * weights.capital_availability
+            + credit * weights.credit_fit
+            + liquidity * weights.liquidity_preservation
+            + cash_flow * weights.cash_flow_impact
+            + ltw * weights.long_term_wealth_impact
+            + complexity * weights.complexity
+            + risk * weights.risk
+        ) / 100.0
+        weighted_score = round(raw, 0)
 
         rows.append(
             ScoredStrategy(
@@ -480,18 +540,18 @@ def score_strategies(
                 name=strat.name,
                 capital_available=capital_available,
                 capital_needed=capital_needed,
-                capital_coverage=coverage,
-                credit_score=credit,
-                liquidity_score=liquidity,
-                cash_flow_score=cash_flow,
-                eligibility_score=eligibility,
-                complexity_score=complexity,
-                risk_score=risk,
-                property_fit=property_fit,
+                capital_coverage_pct=coverage,
+                capital_availability=capital_availability,
+                credit_fit=credit,
+                liquidity_preservation=liquidity,
+                cash_flow_impact=cash_flow,
+                long_term_wealth_impact=ltw,
+                complexity=complexity,
+                risk=risk,
                 weighted_score=weighted_score,
-                rank=0,  # set below
+                rank=0,
                 consumer_output=_consumer_output(strat.name, weighted_score, target.target_property_type),
-                formula_check=(
+                capital_check=(
                     "Capital need covered" if coverage >= 1.0 else "Capital gap remains"
                 ),
                 key_tradeoff=strat.key_tradeoff,
@@ -501,26 +561,25 @@ def score_strategies(
             )
         )
 
-    # Rank — 1 = highest score. Stable on ties (workbook uses RANK +
-    # COUNTIF trick to break ties; here we just take row order).
+    # Rank — 1 = highest score. Ties broken by row order (stable).
     ranked = sorted(rows, key=lambda r: r.weighted_score, reverse=True)
-    rank_by_key: dict[str, int] = {}
-    for i, row in enumerate(ranked, start=1):
-        rank_by_key[row.key] = i
+    rank_by_key: dict[str, int] = {r.key: i for i, r in enumerate(ranked, start=1)}
 
-    # Re-emit rows with rank attached (frozen dataclass = rebuild).
     return [
         ScoredStrategy(
             key=r.key, name=r.name,
             capital_available=r.capital_available, capital_needed=r.capital_needed,
-            capital_coverage=r.capital_coverage,
-            credit_score=r.credit_score, liquidity_score=r.liquidity_score,
-            cash_flow_score=r.cash_flow_score, eligibility_score=r.eligibility_score,
-            complexity_score=r.complexity_score, risk_score=r.risk_score,
-            property_fit=r.property_fit, weighted_score=r.weighted_score,
+            capital_coverage_pct=r.capital_coverage_pct,
+            capital_availability=r.capital_availability,
+            credit_fit=r.credit_fit,
+            liquidity_preservation=r.liquidity_preservation,
+            cash_flow_impact=r.cash_flow_impact,
+            long_term_wealth_impact=r.long_term_wealth_impact,
+            complexity=r.complexity, risk=r.risk,
+            weighted_score=r.weighted_score,
             rank=rank_by_key[r.key],
             consumer_output=r.consumer_output,
-            formula_check=r.formula_check,
+            capital_check=r.capital_check,
             key_tradeoff=r.key_tradeoff,
             recommendation_type=r.recommendation_type,
             property_type_note=r.property_type_note,

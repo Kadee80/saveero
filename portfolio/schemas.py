@@ -121,22 +121,31 @@ class TargetMetricsOut(BaseModel):
 
 
 class ScoredStrategyOut(BaseModel):
+    """
+    Mirrors strategy_scoring.ScoredStrategy. Factor names are
+    canonical (Van's matrix); changing them requires touching
+    portfolioApi.ts + PortfolioBuilder.tsx in lockstep.
+    """
     key: str
     name: str
+    # Capital math (context, not weighted directly)
     capital_available: float
     capital_needed: float
-    capital_coverage: float
-    credit_score: float
-    liquidity_score: float
-    cash_flow_score: float
-    eligibility_score: float
-    complexity_score: float
-    risk_score: float
-    property_fit: float
+    capital_coverage_pct: float
+    # Seven scoring dimensions
+    capital_availability: float
+    credit_fit: float
+    liquidity_preservation: float
+    cash_flow_impact: float
+    long_term_wealth_impact: float
+    complexity: float
+    risk: float
+    # Final
     weighted_score: float
     rank: int
+    # Consumer language
     consumer_output: str
-    formula_check: str
+    capital_check: str
     key_tradeoff: str
     recommendation_type: str
     property_type_note: str
