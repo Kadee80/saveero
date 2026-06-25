@@ -26,7 +26,34 @@ first session onward.
 
 ---
 
-## 2. Getting in: signup → onboarding wizard
+## 2. Getting in: the anonymous-first entry path
+
+Every calculator works without signing up. Anonymous users get a slim
+sidebar shell (`AnonymousShell`) that mirrors the authed app's
+dimensions but with the nav filtered to public routes — locked items
+render with a Lock icon and route to signup. Each locked click is a
+high-quality conversion event, not a dead-end.
+
+### Landing → /start → calculator
+
+1. **Landing** (`/`) — public marketing page. Every CTA ("Get
+   started" / "Try it now") routes to `/start`, **not** to the
+   signup form.
+2. **`/start`** mounts the OnboardingWizard anonymously
+   (`StartIntake.tsx` wrapper). Same 5-step wizard as the
+   post-signup version, but answers are stashed in localStorage
+   instead of PUT-ing to a lead row.
+3. On finish, the user is routed to the matching engine page
+   (`/decision-map` or `/fthb-decision-map`) based on the derived
+   role from their intake answers.
+4. They can run the calculator end-to-end — engine endpoints accept
+   anonymous requests. The "Save scenario" and "Contact a partner"
+   buttons render as `SignupPrompt` instead of doing their normal
+   action.
+5. When they eventually sign up, `App.tsx`'s session-mount effect
+   reads the stash and PUTs the intake answers into the
+   freshly-seeded lead row (no double-wizard) AND saves their last
+   anonymous analysis as their first saved scenario (no lost work).
 
 ### Signup
 
@@ -129,16 +156,26 @@ pages):** The inputs are collected through a shared component that has two
 views:
 
 - **Step-by-step wizard** (default for consumers) — one group of fields per
-  screen, progress strip, Back / Next / Finish. The Finish button runs the
-  engine. 7 steps: Current home & mortgage / Market & tax assumptions /
-  Refinance terms / Purchase of new home / New-home ongoing costs / Rental
-  income & expenses / Liquidity check.
+  screen, progress strip with **named step labels** under each numbered dot,
+  Back / Next / Finish. Each step has a **per-step illustration** beside the
+  heading (~180px square, generated via `scripts/gen_illustrations.py`) and
+  an instructive description ("Just a few details to help us build your
+  decision map. Approximate numbers are perfectly fine."). The wizard card
+  is **`position: sticky top-0`** so it stays in view while the user scrolls
+  down to results. The Finish button runs the engine. 7 steps: Tell us about
+  your home / Market & tax assumptions / Refinance terms / Purchase of new
+  home / New-home ongoing costs / Rental income & expenses / Liquidity check.
 - **All-fields form** (default for pros) — every field on one scrollable card
   stack, single Recalculate button at the bottom.
 
 The toggle is in the top-right of the inputs section ("Step-by-step / All
 fields"). The user's choice **persists in localStorage** for that page — once
 they pick, their preference wins forever.
+
+**Tooltips on every field.** A small `?` button next to each label opens a
+plain-English explanation pulled from the centralised tooltip copy file
+(`webapp/src/copy/tooltips.ts`). Keyboard accessible, portal-rendered so it
+escapes overflow-hidden parents.
 
 After clicking Recalculate (in either view), results render below: a
 decision summary, a comparison table across all 5 scenarios, scenario detail

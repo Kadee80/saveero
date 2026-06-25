@@ -1,6 +1,15 @@
 # Scenario Engine Documentation
 
-This document describes Saveero's core calculation engine—five housing decision scenarios that model different paths a homeowner can take with their property.
+This document describes Saveero's two consumer-facing scenario
+engines — the homeowner Decision Map (Part 1, below) and the
+first-time-homebuyer engine (Part 2). Both are pure-Python,
+deterministic, golden-tested against client-validated Excel models.
+
+For the third engine — the Portfolio Strategy Engine for investors —
+see [`PORTFOLIO_ENGINE_ARCH.md`](./PORTFOLIO_ENGINE_ARCH.md). That
+engine is substantively different in shape (multi-property input,
+strategy registry, goal-weighted scoring) and warrants its own spec
+rather than a section here.
 
 ---
 

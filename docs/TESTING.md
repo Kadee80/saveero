@@ -1,418 +1,248 @@
-# Saveero Testing Guide
+# Testing
 
-This document explains the test structure, how to run tests locally, and best practices for adding new tests to saveero.
+Test conventions, layout, and how to run things. The most important
+discipline in this codebase is the **golden-test pattern for the
+engines** — covered in detail below.
 
-## Overview
+For higher-altitude context, see [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+For where new tests should live when adding endpoints / pages, see
+[`BACKEND.md`](./BACKEND.md) and [`FRONTEND.md`](./FRONTEND.md).
 
-Saveero has comprehensive test coverage for critical user workflows across frontend and backend:
+---
 
-### Frontend Tests (React/Vitest)
-- **Location**: `webapp/src/__tests__/`
-- **Technology**: Vitest + React Testing Library
-- **Files**:
-  - `pages/Login.test.tsx` - Authentication flows
-  - `pages/Dashboard.test.tsx` - Listings dashboard
-  - `api/auth.test.ts` - Auth API client
-  - `lib/mortgage.test.ts` - Mortgage calculations
+## Test layout
 
-### Backend Tests (Python/pytest)
-- **Location**: `tests/`
-- **Technology**: pytest + FastAPI TestClient
-- **Files**:
-  - `test_auth.py` - Authentication and JWT
-  - `test_listing_routes.py` - Listing API endpoints
+### Backend (pytest)
 
-## Running Tests
+```
+tests/
+  conftest.py                       Shared fixtures, env stubs
+  mock_responses.py                 Canned responses for external services
 
-### Frontend Tests
+  test_scenarios_golden.py          Homeowner engine — cell-for-cell goldens
+  test_scenarios_core.py            Shared scenario utilities
+  test_fthb_golden.py               FTHB engine — cell-for-cell goldens
+  test_portfolio_golden.py          Portfolio engine — cell-for-cell goldens
 
-**Prerequisites:**
-```bash
-cd webapp
-npm install vitest @testing-library/react @testing-library/user-event -D
+  test_mortgage_analyzer.py         Mortgage analyzer
+  test_mortgage_affordability.py    Affordability calc
+  test_mortgage_refinance.py        Refinance calc
+  test_mortgage_core.py             Shared mortgage utilities
+
+  test_auth.py                      JWT validation
+  test_listing_routes.py            AI listing wizard endpoints
+  test_notifications.py             Engaged-lead webhook firing
 ```
 
-**Run all frontend tests:**
-```bash
-cd webapp
-npm test
+The directory mirrors the source layout — when adding a router or an
+engine module, add a `test_*.py` file beside the existing peers.
+
+### Frontend (Vitest + React Testing Library)
+
+```
+webapp/src/__tests__/
+  api/
+    auth.test.ts
+  pages/
+    Dashboard.test.tsx
+    Login.test.tsx
+  lib/
+    mortgage.test.ts
 ```
 
-**Run specific test file:**
-```bash
-npm test Login.test.tsx
-```
+Mirror the source layout — `pages/X.tsx` → `__tests__/pages/X.test.tsx`.
 
-**Run tests in watch mode:**
-```bash
-npm test -- --watch
-```
+---
 
-**Run tests with coverage:**
-```bash
-npm test -- --coverage
-```
+## Running tests
 
-**Run tests in UI mode (Vitest UI):**
-```bash
-npm test -- --ui
-```
+### Backend
 
-### Backend Tests
-
-**Prerequisites:**
 ```bash
-pip install pytest pytest-cov
-```
+# Full suite
+pytest
 
-**Run all backend tests:**
-```bash
-pytest tests/ -v
-```
+# By file
+pytest tests/test_scenarios_golden.py -v
+pytest tests/test_fthb_golden.py -v
+pytest tests/test_portfolio_golden.py -v
 
-**Run specific test file:**
-```bash
-pytest tests/test_auth.py -v
-```
+# By keyword (matches test or class names)
+pytest -k "stay" -v
+pytest -k "refinance and not rent" -v
 
-**Run specific test class:**
-```bash
+# By class / function
 pytest tests/test_auth.py::TestLogin -v
-```
+pytest tests/test_auth.py::TestLogin::test_valid_credentials -v
 
-**Run specific test:**
-```bash
-pytest tests/test_auth.py::TestLogin::test_login_with_valid_credentials -v
-```
+# Coverage report (HTML output in htmlcov/)
+pytest --cov=scenarios --cov=portfolio --cov=api --cov-report=html
 
-**Run tests with coverage:**
-```bash
-pytest tests/ --cov=api --cov=core --cov=listing_wizard --cov-report=html
-```
-
-**Run tests in parallel (faster):**
-```bash
+# Parallel (faster, needs pytest-xdist)
 pip install pytest-xdist
-pytest tests/ -n auto
+pytest -n auto
 ```
 
-## Test Structure
+### Frontend
 
-### Frontend (Vitest)
+```bash
+cd webapp
+npm test                       # vitest, headless
+npm test -- --watch            # watch mode
+npm test -- --ui               # Vitest UI in browser
+npm test Login                 # specific test
+npm run test:coverage          # coverage
+```
 
-Each test file follows this structure:
+---
+
+## The golden-test pattern (engines)
+
+The most important discipline in the codebase. Every engine output is
+pinned to the client-validated Excel model with a golden test.
+
+**What a golden test looks like:**
+
+```python
+# tests/test_scenarios_golden.py
+def test_stay_scenario_net_position_at_5yr(default_inputs):
+    result = compute_stay(default_inputs.set(hold_years=5))
+    assert result.net_position == approx(412_345, abs=1)
+```
+
+The expected value (`412_345`) comes from the Excel model. Same
+inputs → same number → test passes. If the engine math changes and
+the new value differs from Excel:
+
+- **Engine output is correct (Excel was wrong, or we changed the
+  spec):** re-pin the golden. Commit message must explain WHY the new
+  value is correct.
+- **Engine output is wrong (we introduced a bug):** fix the engine
+  until the golden passes again.
+
+**Never change a golden to make a failing test pass without
+understanding why.** The Excel model is the trust anchor — if we lose
+that property, we lose the thing that distinguishes this product from
+"yet another LLM that makes up mortgage math."
+
+**Default-inputs fixtures** live in `conftest.py` and mirror the
+default values in each engine's source Excel workbook. New engines
+should add their own default-inputs fixture; new scenarios should
+extend the existing fixture.
+
+---
+
+## Test environment
+
+`tests/conftest.py` sets a handful of env vars at import time so the
+backend's Pydantic settings load without requiring a real `.env`:
+
+```python
+os.environ['SUPABASE_URL'] = 'http://localhost:54321'
+os.environ['SUPABASE_SERVICE_ROLE_KEY'] = 'test-key'
+os.environ['OPENROUTER_API_KEY'] = 'test-key'
+# ...
+```
+
+Tests that need to interact with Supabase or external services use
+mocked clients from `conftest.py` fixtures — they never hit a real
+service. If you add a test that genuinely needs a live Supabase
+project, that's a sign the test should probably be mocking instead.
+
+For external-service responses (OpenRouter, FRED, Bridge MLS),
+canned responses live in `tests/mock_responses.py`.
+
+---
+
+## Frontend test conventions
 
 ```typescript
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
-describe('Component Name', () => {
+describe('LoginForm', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('should do something', async () => {
-    // Arrange
+  it('submits with valid credentials', async () => {
     const user = userEvent.setup()
-    
-    // Act
-    render(<Component />)
-    await user.click(screen.getByText('Button'))
-    
-    // Assert
-    expect(screen.getByText('Result')).toBeInTheDocument()
+    render(<LoginForm />)
+    await user.type(screen.getByLabelText(/email/i), 'a@b.com')
+    await user.type(screen.getByLabelText(/password/i), 'pw')
+    await user.click(screen.getByRole('button', { name: /sign in/i }))
+    expect(mockedSignIn).toHaveBeenCalledWith('a@b.com', 'pw')
   })
 })
 ```
 
-**Key patterns:**
-- Use `vi.mock()` for external dependencies
-- Use `userEvent.setup()` for user interactions
-- Use `waitFor()` for async operations
-- Use `beforeEach()` to reset mocks between tests
-- Follow Arrange-Act-Assert pattern
+- **Query by role / label**, not by class name or test-id.
+  Test-IDs are an escape hatch for accessibility holes; don't reach
+  for them first.
+- **Mock at the API client boundary** (`webapp/src/api/*`), not at
+  `fetch`. Keeps tests resilient to implementation churn.
+- **`vi.clearAllMocks()` in `beforeEach`** to prevent state leak
+  between tests.
 
-### Backend (pytest)
+---
 
-Each test file follows this structure:
+## Pre-merge checklist
 
-```python
-import pytest
-from fastapi.testclient import TestClient
-from main import app
+Before opening / merging a PR:
 
-client = TestClient(app)
-
-@pytest.fixture
-def auth_headers():
-    return {'Authorization': f'Bearer {valid_token}'}
-
-class TestFeature:
-    def test_happy_path(self, auth_headers):
-        response = client.get('/api/endpoint', headers=auth_headers)
-        assert response.status_code == 200
-    
-    def test_error_case(self):
-        response = client.get('/api/endpoint')
-        assert response.status_code == 401
-```
-
-**Key patterns:**
-- Use `@pytest.fixture` for setup/teardown
-- Use `TestClient` for HTTP testing
-- Test both happy paths and error cases
-- Use `mock.patch()` to mock external services
-- Group tests in classes by feature
-
-## Mocking Strategy
-
-### Frontend Mocking
-
-**Mock external APIs:**
-```typescript
-vi.mock('@/api/auth', () => ({
-  signIn: vi.fn(),
-  signUp: vi.fn(),
-}))
-
-// In test:
-vi.mocked(authModule.signIn).mockResolvedValue({
-  data: { user: { email: 'test@example.com' } },
-  error: null,
-})
-```
-
-**Mock Supabase:**
-```typescript
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: () => ({
-    auth: {
-      signInWithPassword: vi.fn(),
-      signUp: vi.fn(),
-      // ... other methods
-    },
-  }),
-}))
-```
-
-**Mock React Router:**
-```typescript
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom')
-  return {
-    ...actual,
-    useNavigate: () => vi.fn(),
-  }
-})
-```
-
-### Backend Mocking
-
-**Mock Supabase:**
-```python
-from unittest.mock import patch, MagicMock
-
-with patch('api.listing_wizard_routes.supabase.auth') as mock_auth:
-    mock_auth.sign_up.return_value = {'user': {...}, 'error': None}
-    # Test code
-```
-
-**Mock external services:**
-```python
-with patch('api.listing_wizard_routes.generate_listing') as mock_gen:
-    mock_gen.return_value = {
-        'title': '3BR/2BA',
-        'address': '123 Main St',
-        # ...
-    }
-    # Test code
-```
-
-## Test Data
-
-### Sample User
-```typescript
-const mockUser = {
-  id: 'user-123',
-  email: 'test@example.com',
-  email_confirmed_at: '2024-01-01T00:00:00',
-}
-```
-
-### Sample Listing
-```typescript
-const mockListing = {
-  id: 'listing-1',
-  address: '123 Main St, Anytown, CA 12345',
-  status: 'draft',
-  price_mid: 500000,
-  beds: 3,
-  baths: 2,
-  description_ai: 'Beautiful home',
-  created_at: new Date().toISOString(),
-}
-```
-
-### Sample JWT Token
-```python
-valid_jwt_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEyMyIsImV4cCI6OTk5OTk5OTk5OX0.test'
-```
-
-## Coverage Goals
-
-- **Critical paths**: >90% coverage required
-- **API routes**: >85% coverage required
-- **Utilities**: >80% coverage required
-- **Overall**: >80% coverage target
-
-**View coverage report:**
-
-Frontend:
 ```bash
-npm test -- --coverage
-# Open coverage/index.html
+pytest                          # backend, all-green
+cd webapp && npm test           # frontend, all-green
+cd webapp && npm run build      # tsc + vite build, no errors
 ```
 
-Backend:
-```bash
-pytest --cov=api --cov=listing_wizard --cov-report=html
-# Open htmlcov/index.html
-```
+The `npm run build` step catches TypeScript errors that the
+dev server silently ignores. Don't skip it.
 
-## Adding New Tests
+If the PR touches engine math, run the relevant golden suite
+specifically and look at what passed / failed. If you re-pinned
+anything, the PR description should say so + explain why.
 
-### For Frontend Components
+---
 
-1. Create test file in `webapp/src/__tests__/[path]/Component.test.tsx`
-2. Import testing utilities:
-   ```typescript
-   import { describe, it, expect, beforeEach, vi } from 'vitest'
-   import { render, screen, waitFor } from '@testing-library/react'
-   ```
-3. Write tests following the structure in existing test files
-4. Mock external dependencies
-5. Test happy paths, error cases, and edge cases
-6. Run: `npm test Component.test.tsx`
+## CI
 
-### For Backend Routes
+GitHub Actions workflows in `.github/workflows/`:
 
-1. Create test file in `tests/test_feature.py`
-2. Import test utilities:
-   ```python
-   import pytest
-   from fastapi.testclient import TestClient
-   from main import app
-   ```
-3. Create test class and methods
-4. Use fixtures for common setup
-5. Mock external services (Supabase, AI models, etc.)
-6. Test valid requests and error cases
-7. Run: `pytest tests/test_feature.py -v`
+- **`ci.yml`** — runs `pytest` on every PR.
+- **`tests.yml`** — runs the frontend suite (vitest) on every PR.
+- **`deploy.yml`** — touches deployment-related actions.
 
-### Checklist for New Tests
+Branch protection requires both checks to pass before merge — see
+[`BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md).
 
-- [ ] Tests cover happy path
-- [ ] Tests cover error cases
-- [ ] Tests cover edge cases
-- [ ] External APIs/services are mocked
-- [ ] Tests are isolated (no dependencies between tests)
-- [ ] Tests clean up after themselves (beforeEach/afterEach)
-- [ ] Test names clearly describe what they test
-- [ ] Comments explain complex test setup
-- [ ] Code follows existing patterns in test files
+---
 
-## Common Issues
+## Things to avoid
 
-### Issue: Tests timeout
-**Solution**: Increase jest/vitest timeout or check for infinite loops
-```typescript
-it('long running test', async () => {
-  // test code
-}, 10000) // 10 second timeout
-```
+- **Don't change a golden to make a failing test pass without
+  re-deriving the Excel value.** Either the engine is wrong (fix
+  it) or the Excel was wrong (re-pin and document).
+- **Don't write tests that hit live external services.** Mock at the
+  client boundary.
+- **Don't share state between tests.** `beforeEach` should reset
+  every mock and any module-level state.
+- **Don't add `it.skip` to silence a failing test.** Either fix it,
+  delete it, or open a follow-up issue with the test temporarily
+  expected to fail (`xfail`) and a clear deadline.
+- **Don't gold-plate test coverage on the engines via integration
+  tests.** Per-cell unit goldens are how the engines stay trustworthy.
+  An integration test that runs the whole engine and asserts on a
+  summary number can pass while individual cells silently drift.
 
-### Issue: Mock not being used
-**Solution**: Ensure mock is created before importing the module
-```typescript
-vi.mock('@/api/auth')  // Must be before import
-import { signIn } from '@/api/auth'
-```
+---
 
-### Issue: Async test fails silently
-**Solution**: Always await promises and use waitFor
-```typescript
-await user.click(button)  // await user events
-await waitFor(() => {     // wait for async state updates
-  expect(screen.getByText('Result')).toBeInTheDocument()
-})
-```
+## See also
 
-### Issue: Database tests leave data behind
-**Solution**: Use transactions or mock the database
-```python
-with patch('db.insert_listing') as mock_insert:
-    mock_insert.return_value = {'id': 'test-id'}
-    # test code
-```
-
-## CI/CD Integration
-
-### GitHub Actions Example
-
-```yaml
-name: Tests
-
-on: [push, pull_request]
-
-jobs:
-  frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-        with:
-          node-version: '18'
-      - run: cd webapp && npm install && npm test -- --coverage
-      - uses: codecov/codecov-action@v2
-
-  backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.10'
-      - run: pip install -r requirements.txt pytest pytest-cov
-      - run: pytest tests/ --cov
-      - uses: codecov/codecov-action@v2
-```
-
-## Best Practices
-
-1. **Test behavior, not implementation** - Focus on what the component/function does, not how
-2. **Use realistic test data** - Use data shapes that match actual API responses
-3. **Keep tests fast** - Mock external calls, use fast assertions
-4. **Make tests independent** - Tests should not depend on execution order
-5. **Clear test names** - Use descriptive names that explain what is being tested
-6. **Avoid test interdependence** - Each test should be runnable in isolation
-7. **Test edge cases** - Empty lists, null values, very large inputs
-8. **Mock external services** - Don't make real API calls in tests
-9. **Keep setup simple** - Use fixtures/beforeEach to reduce duplication
-10. **Review coverage reports** - Identify untested code paths
-
-## Resources
-
-- [Vitest Documentation](https://vitest.dev/)
-- [React Testing Library](https://testing-library.com/react)
-- [pytest Documentation](https://docs.pytest.org/)
-- [FastAPI Testing](https://fastapi.tiangolo.com/advanced/testing/)
-- [Mocking with Vitest](https://vitest.dev/api/vi.html)
-- [Mocking with pytest](https://docs.pytest.org/en/stable/how-to-use-fixtures.html)
-
-## Support
-
-For questions about testing:
-1. Check existing test files for similar patterns
-2. Review this documentation
-3. Consult testing framework docs linked above
-4. Ask in team Slack/Discord
+- [`BACKEND.md`](./BACKEND.md) — where to add backend tests
+- [`FRONTEND.md`](./FRONTEND.md) — where to add frontend tests
+- [`SCENARIOS.md`](./SCENARIOS.md) — engine math (the goldens pin to this)
+- [`PORTFOLIO_ENGINE_ARCH.md`](./PORTFOLIO_ENGINE_ARCH.md) — golden discipline
+  for the third engine
+- [`BRANCH_PROTECTION.md`](./BRANCH_PROTECTION.md) — what CI checks gate merges
